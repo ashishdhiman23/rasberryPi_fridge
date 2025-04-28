@@ -2,7 +2,7 @@
 set -e
 
 echo "Installing dependencies..."
-npm ci
+npm install --no-audit --prefer-offline
 
 echo "Making react-scripts executable..."
 chmod +x ./node_modules/.bin/react-scripts
