@@ -21,7 +21,6 @@ services:
     env: static
     buildCommand: cd frontend && npm install && npm run build
     staticPublishPath: frontend/build
-    region: oregon  # Using a specific region instead of "auto"
     branch: main
     routes:
       - type: rewrite
