@@ -1,0 +1,31 @@
+services:
+  # Backend API service
+  - type: web
+    name: smart-fridge-backend
+    env: python
+    buildCommand: pip install -r backend/requirements.txt
+    startCommand: cd backend && uvicorn main:app --host 0.0.0.0 --port $PORT
+    region: auto  # Use any region you prefer
+    plan: free  # or other paid plans
+    branch: main
+    healthCheckPath: /
+    envVars:
+      - key: OPENAI_API_KEY
+        sync: false  # This will be manually set in Render dashboard
+      - key: ALLOWED_ORIGINS
+        value: https://smart-fridge-dashboard.onrender.com
+
+  # Frontend static site
+  - type: web
+    name: smart-fridge-dashboard
+    env: static
+    buildCommand: cd frontend && npm install && npm run build
+    staticPublishPath: frontend/build
+    branch: main
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: REACT_APP_API_URL
+        value: https://smart-fridge-backend.onrender.com/api 

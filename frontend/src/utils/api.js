@@ -2,10 +2,13 @@
  * API utilities for Smart Fridge Dashboard
  */
 
-// API base URL - change to actual backend URL in production
-const API_BASE_URL = process.env.NODE_ENV === 'production' 
-  ? '/api' 
-  : '/mock.json';
+// API base URL - use environment variable if available or fallback to default
+const API_BASE_URL = process.env.REACT_APP_API_URL || 
+  (process.env.NODE_ENV === 'production' 
+    ? 'https://smart-fridge-backend.onrender.com/api' 
+    : '/mock.json');
+
+console.log('Using API URL:', API_BASE_URL);
 
 /**
  * Fetches the current fridge status from the API
