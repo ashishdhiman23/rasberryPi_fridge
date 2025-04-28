@@ -18,7 +18,7 @@ services:
   - type: web
     name: smart-fridge-dashboard
     env: static
-    buildCommand: cd frontend && npm install --legacy-peer-deps && npx react-scripts build
+    buildCommand: cd frontend && chmod +x build.sh && ./build.sh
     staticPublishPath: frontend/build
     branch: main
     routes:
