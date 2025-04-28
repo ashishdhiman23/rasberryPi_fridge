@@ -1,0 +1,15 @@
+{
+  "status": "ok",
+  "timestamp": "2025-04-12T12:00:00Z",
+  "temp": 4.2,
+  "humidity": 62,
+  "gas": 190,
+  "items": ["mango", "milk", "onion", "lemon"],
+  "ai_response": "🍋 Lemon has been inside for 5 days, consider using it soon.",
+  "priority": ["safety", "freshness", "recipes"],
+  "analysis": {
+    "safety": "✅ No gas or temp concerns.",
+    "freshness": "🥕 Mango fresh, onion turning soft.",
+    "recipes": "🥭 Try mango lassi or onion tomato curry."
+  }
+} 
