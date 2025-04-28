@@ -5,7 +5,6 @@ services:
     env: python
     buildCommand: pip install -r backend/requirements.txt
     startCommand: cd backend && uvicorn main:app --host 0.0.0.0 --port $PORT
-    region: oregon  # Using a specific region instead of "auto"
     plan: free  # or other paid plans
     branch: main
     healthCheckPath: /
