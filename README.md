@@ -1,95 +1,103 @@
-# Smart Fridge AI Dashboard
+# Smart Fridge Raspberry Pi Monitoring System
 
-A modern, mobile-friendly system that uses GPT-4 Vision and LLM multi-agent technology to monitor your refrigerator and provide intelligent insights.
+This project is a comprehensive monitoring system for a smart refrigerator using Raspberry Pi. It includes both the Raspberry Pi code for hardware integration and a simulator for testing without physical hardware.
 
-## Features
+## Project Components
 
-- **React + Tailwind CSS** frontend with responsive design
-- **FastAPI** backend with GPT-4 Vision and LLM integration
-- Real-time sensor monitoring (temperature, gas, humidity)
-- Food detection using computer vision
-- AI-powered analysis for:
-  - Food safety alerts
-  - Freshness tracking
-  - Recipe suggestions
+### Raspberry Pi Module
+The Raspberry Pi module includes:
+- Temperature and humidity monitoring
+- Gas sensor for detecting refrigerant leaks
+- Camera for capturing interior images
+- API for uploading data to a backend server
 
-## Project Structure
+### Simulator
+The simulator allows testing without Raspberry Pi hardware:
+- Generates realistic sensor readings
+- Creates synthetic fridge interior images
+- Uploads data to your backend API
+- Simulates hardware failures to test robustness
 
+## Getting Started
+
+### Hardware Requirements
+For the full Raspberry Pi implementation:
+- Raspberry Pi (3B+ or 4 recommended)
+- DHT22 temperature and humidity sensor
+- MQ-5 gas sensor with MCP3008 ADC
+- Raspberry Pi Camera Module
+- Internet connectivity
+
+### Testing with the Simulator
+To test without hardware:
+
+1. Install dependencies:
+   ```
+   cd simulator
+   pip install -r requirements.txt
+   ```
+
+2. Configure the simulator:
+   Edit the `.env` file to set your API endpoint:
+   ```
+   API_BASE_URL=http://your-api-server/api
+   ```
+
+3. Run the simulator:
+   ```
+   # On Windows:
+   run_simulator.bat
+   
+   # On Linux/Mac:
+   python run_simulator.py
+   ```
+
+4. Optional: Run the mock API server (if your backend is not available):
+   ```
+   # On Windows:
+   run_mock_server.bat
+   
+   # On Linux/Mac:
+   python -m simulator.mock_server
+   ```
+
+## Command-line Options
+
+The simulator supports various options:
 ```
-├── frontend/               # React frontend
-│   ├── public/             # Static assets
-│   └── src/
-│       ├── components/     # UI components
-│       ├── pages/          # Page components
-│       └── utils/          # Utility functions
+python run_simulator.py --interval 10 --image-interval 60 --real-api
+```
+
+- `--interval`: Seconds between sensor readings (default: 30)
+- `--image-interval`: Seconds between image captures (default: 300)
+- `--real-api`: Use real API endpoint instead of simulation
+
+## Development
+
+### Project Structure
+```
+├── raspberry-pi/       # Raspberry Pi code (for hardware)
+│   ├── main.py         # Main entry point
+│   ├── sensors.py      # Sensor interaction
+│   ├── camera.py       # Camera management
+│   ├── api.py          # API communication
+│   └── config.py       # Configuration
 │
-└── backend/                # FastAPI backend
-    ├── agents/             # FridgeAgent LLM logic
-    ├── data/               # Data storage
-    ├── routes/             # API endpoints
-    ├── services/           # Vision and other services
-    └── utils/              # Utility functions
+├── simulator/          # Simulator code (no hardware needed)
+│   ├── simulator.py    # Main simulator
+│   ├── mock_sensors.py # Sensor simulation
+│   ├── mock_camera.py  # Camera simulation
+│   ├── mock_api.py     # API simulation
+│   ├── mock_server.py  # Mock backend server
+│   └── config.py       # Simulator configuration
+│
+├── run_simulator.py    # Wrapper to run simulator
+├── run_simulator.bat   # Windows batch for simulator
+└── run_mock_server.bat # Windows batch for mock server
 ```
 
-## Setup Instructions
-
-### Frontend
-
-1. Navigate to the frontend directory:
-   ```
-   cd frontend
-   ```
-
-2. Install dependencies:
-   ```
-   npm install
-   ```
-
-3. Start the development server:
-   ```
-   npm run dev
-   ```
-
-### Backend
-
-1. Navigate to the backend directory:
-   ```
-   cd backend
-   ```
-
-2. Create a virtual environment:
-   ```
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   ```
-
-3. Install dependencies:
-   ```
-   pip install fastapi uvicorn openai python-dotenv
-   ```
-
-4. Set up your environment variables:
-   ```
-   cp .env.example .env
-   # Edit .env to add your OpenAI API key
-   ```
-
-5. Start the server:
-   ```
-   uvicorn main:app --reload
-   ```
-
-## API Endpoints
-
-- `POST /api/upload` - Upload sensor data and fridge image
-- `GET /api/fridge-status` - Get current fridge status
-
-## Technologies Used
-
-- **Frontend**: React, Tailwind CSS
-- **Backend**: FastAPI, OpenAI API (GPT-4 Vision)
-- **Data**: JSON for storage
+## Contributing
+Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## License
-
-MIT 
+This project is licensed under the MIT License - see the LICENSE file for details. 
