@@ -2,18 +2,13 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 import os
-import sys
-from pathlib import Path
 from dotenv import load_dotenv
 
-# Add the backend directory to the Python path
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
-# Use absolute imports from the current directory
-from backend.routes.upload import router as upload_router
-from backend.routes.status import router as status_router
-from backend.routes.notifications import router as notifications_router
-from backend.routes.chat import router as chat_router
+# Use direct imports based on the current directory structure
+from routes.upload import router as upload_router
+from routes.status import router as status_router
+from routes.notifications import router as notifications_router
+from routes.chat import router as chat_router
 
 # Load environment variables from .env file
 load_dotenv()
