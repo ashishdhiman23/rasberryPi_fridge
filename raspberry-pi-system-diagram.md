@@ -76,4 +76,74 @@ Configuration settings in config.py control:
 - Monitoring frequency
 - Image capture frequency
 - Sensor pin assignments
-- API endpoint URLs 
+- API endpoint URLs
+
+## Simulator Overview
+
+For development and testing without actual Raspberry Pi hardware, a simulator is provided that emulates the hardware components and data flow.
+
+### Simulator Architecture
+
+```
++----------------+     +-----------------+     +---------------+
+| Mock Sensors   |     | Mock Camera     |     | Config Module |
+| (mock_sensors) |     | (mock_camera)   |     | (config.py)   |
++----------------+     +-----------------+     +---------------+
+       |                       |                      |
+       v                       v                      v
++--------------------------------------------------------------+
+|                     Simulator Module                         |
+|                     (simulator.py)                           |
++--------------------------------------------------------------+
+                             |
+                             v
+                      +--------------+
+                      | Mock API     |
+                      | (mock_api)   |
+                      +--------------+
+                             |
+                             v
+                     +----------------+
+                     | Backend Server |
+                     | (Real API or   |
+                     | Mock Server)   |
+                     +----------------+
+```
+
+### Simulator Components
+
+1. **Simulator Module (simulator.py)**
+   - Replaces the main.py module for simulation
+   - Orchestrates mock sensors and camera
+   - Schedules monitoring cycles
+   - Handles command-line arguments for configuration
+
+2. **Mock Sensors Module (mock_sensors.py)**
+   - Generates realistic sensor readings without hardware
+   - Simulates occasional sensor failures
+   - Configurable temperature, humidity, and gas level ranges
+
+3. **Mock Camera Module (mock_camera.py)**
+   - Generates synthetic fridge interior images
+   - Can use custom images for more realistic testing
+   - Applies timestamps and visual effects
+
+4. **Mock API Module (mock_api.py)**
+   - Simulates API communication or connects to real backend
+   - Implements retry logic and error handling
+   - Provides detailed logging of API interactions
+
+5. **Mock Server (mock_server.py)**
+   - Optional Flask server for complete end-to-end testing
+   - Provides API endpoints for receiving data
+   - Stores received data and images
+
+### Running the Simulator
+
+The simulator can be run using the wrapper script:
+
+```
+python run_simulator.py --interval 30 --image-interval 60 [--real-api]
+```
+
+For more details on the simulator, refer to the [Simulator README](simulator/README.md). 
