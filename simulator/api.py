@@ -2,11 +2,16 @@
 API routes for the Smart Fridge Simulator.
 Provides endpoints for interacting with the fridge, including the chat feature.
 """
+import json
 import uuid
+import os
+from pathlib import Path
 from typing import Optional, Dict, Any
 from datetime import datetime
 
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from simulator.chat_agent import ChatAgent
@@ -18,8 +23,28 @@ app = FastAPI(
     version="1.0.0"
 )
 
+# Add CORS middleware to allow requests from the dashboard
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allow all origins for development
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 # Initialize chat agent
 chat_agent = ChatAgent()
+
+# Path to data files
+SIMULATOR_DIR = Path("simulator")
+LAST_UPLOAD_FILE = SIMULATOR_DIR / "last_upload.json"
+LAST_API_RESPONSE_FILE = SIMULATOR_DIR / "last_api_response.json"
+MOCK_IMAGES_DIR = SIMULATOR_DIR / "mock_images"
+DASHBOARD_DIR = Path("dashboard")
+
+# Serve dashboard static files
+app.mount("/dashboard", StaticFiles(directory=str(DASHBOARD_DIR), html=True), name="dashboard")
+app.mount("/simulator/mock_images", StaticFiles(directory=str(MOCK_IMAGES_DIR)), name="images")
 
 # Pydantic models for request/response validation
 class ChatRequest(BaseModel):
@@ -70,4 +95,86 @@ async def get_status() -> Dict[str, Any]:
         "status": "online",
         "timestamp": datetime.now().isoformat(),
         "features": ["chat_with_fridge", "sensor_data", "image_capture"]
-    } 
+    }
+
+@app.get("/api/last_data", tags=["Data"])
+async def get_last_data() -> Dict[str, Any]:
+    """
+    Get the last uploaded sensor data and food items.
+    
+    This endpoint combines sensor data from last_upload.json and
+    food items from last_api_response.json for the dashboard to display.
+    """
+    try:
+        # Read sensor data
+        sensor_data = {}
+        if LAST_UPLOAD_FILE.exists():
+            with open(LAST_UPLOAD_FILE, "r") as f:
+                sensor_data = json.load(f)
+        
+        # Read API response for food items
+        food_items = {}
+        if LAST_API_RESPONSE_FILE.exists():
+            try:
+                with open(LAST_API_RESPONSE_FILE, "r") as f:
+                    api_data = json.load(f)
+                
+                # Extract food items if they exist
+                if "food_items" in api_data:
+                    for item in api_data["food_items"]:
+                        if "name" in item and "detected_at" in item:
+                            days_ago = (datetime.now() - datetime.fromisoformat(item["detected_at"])).days
+                            food_items[item["name"]] = days_ago
+            except json.JSONDecodeError:
+                pass  # Ignore invalid JSON
+        
+        # Get the latest image timestamp
+        latest_image_path = None
+        latest_image_time = 0
+        if MOCK_IMAGES_DIR.exists():
+            for img_path in MOCK_IMAGES_DIR.glob("fridge_*.jpg"):
+                if img_path.is_file():
+                    img_time = img_path.stat().st_mtime
+                    if img_time > latest_image_time:
+                        latest_image_time = img_time
+                        latest_image_path = img_path
+        
+        image_info = None
+        if latest_image_path:
+            image_time = datetime.fromtimestamp(latest_image_time)
+            relative_path = latest_image_path.relative_to(os.getcwd())
+            image_info = {
+                "path": f"/simulator/mock_images/{latest_image_path.name}",
+                "timestamp": image_time.isoformat()
+            }
+        
+        # Combine data
+        result = {
+            "temp": sensor_data.get("temp"),
+            "humidity": sensor_data.get("humidity"),
+            "gas": sensor_data.get("gas"),
+            "timestamp": sensor_data.get("timestamp", datetime.now().isoformat()),
+            "last_seen": food_items,
+            "image": image_info
+        }
+        
+        return result
+    
+    except Exception as e:
+        # Log the error but return a default response
+        print(f"Error getting last data: {str(e)}")
+        return {
+            "temp": None,
+            "humidity": None,
+            "gas": None,
+            "timestamp": datetime.now().isoformat(),
+            "last_seen": {},
+            "image": None
+        }
+
+# Root redirect to dashboard
+@app.get("/", tags=["Dashboard"])
+async def redirect_to_dashboard():
+    """Redirect to the dashboard interface."""
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(url="/dashboard/index.html") 

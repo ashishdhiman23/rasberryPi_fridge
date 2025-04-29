@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Fridge Dashboard</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="dashboard-container">
+        <header class="dashboard-header">
+            <h1>Smart Fridge Dashboard</h1>
+            <div id="api-status" class="status-indicator offline">
+                API: Offline
+            </div>
+        </header>
+
+        <div class="dashboard-grid">
+            <div class="dashboard-card sensor-data">
+                <h2>Current Readings</h2>
+                <div id="readings-container">
+                    <div class="reading">
+                        <span class="reading-label">Temperature:</span>
+                        <span id="temp-value" class="reading-value">--</span>
+                        <span class="reading-unit">°C</span>
+                    </div>
+                    <div class="reading">
+                        <span class="reading-label">Humidity:</span>
+                        <span id="humidity-value" class="reading-value">--</span>
+                        <span class="reading-unit">%</span>
+                    </div>
+                    <div class="reading">
+                        <span class="reading-label">Gas Level:</span>
+                        <span id="gas-value" class="reading-value">--</span>
+                        <span class="reading-unit">PPM</span>
+                    </div>
+                    <div class="reading">
+                        <span class="reading-label">Last Updated:</span>
+                        <span id="last-updated" class="reading-value">--</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="dashboard-card fridge-image">
+                <h2>Current Fridge Image</h2>
+                <div class="image-container">
+                    <img id="fridge-image" src="placeholder-fridge.jpg" alt="Fridge Interior">
+                    <div id="image-timestamp" class="timestamp">No image available</div>
+                </div>
+            </div>
+
+            <div class="dashboard-card chat-container">
+                <h2>Chat with Your Fridge</h2>
+                <div id="chat-messages" class="chat-messages">
+                    <div class="message fridge-message">
+                        Hello! I'm your Smart Fridge assistant. Ask me about your food or for recipe suggestions!
+                    </div>
+                </div>
+                <div class="chat-controls">
+                    <div class="chat-input-container">
+                        <input type="text" id="user-message" class="chat-input" placeholder="Ask your fridge something...">
+                        <button id="send-button" class="send-button">Send</button>
+                    </div>
+                    <div class="chat-options">
+                        <label class="option">
+                            <input type="checkbox" id="include-image" checked>
+                            Include fridge image (better responses but slower)
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <div class="dashboard-card food-items">
+                <h2>Detected Food Items</h2>
+                <div id="food-items-container" class="food-items-list">
+                    <div class="no-items">No food items detected yet</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="dashboard.js"></script>
+</body>
+</html> 
