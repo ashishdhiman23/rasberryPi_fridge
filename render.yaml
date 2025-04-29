@@ -3,8 +3,8 @@ services:
   - type: web
     name: smart-fridge-backend
     env: python
-    buildCommand: pip install -r backend/requirements.txt
-    startCommand: cd backend && PYTHONPATH=.. uvicorn main:app --host 0.0.0.0 --port $PORT
+    buildCommand: pip install -r backend/requirements.txt && pip install -e backend/
+    startCommand: cd backend && python -m uvicorn main:app --host 0.0.0.0 --port $PORT
     plan: free  # or other paid plans
     branch: main
     healthCheckPath: /
