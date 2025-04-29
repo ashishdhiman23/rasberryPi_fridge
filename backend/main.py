@@ -4,10 +4,10 @@ import uvicorn
 import os
 from dotenv import load_dotenv
 
-from backend.routes.upload import router as upload_router
-from backend.routes.status import router as status_router
-from backend.routes.notifications import router as notifications_router
-from backend.routes.chat import router as chat_router
+from routes.upload import router as upload_router
+from routes.status import router as status_router
+from routes.notifications import router as notifications_router
+from routes.chat import router as chat_router
 
 # Load environment variables from .env file
 load_dotenv()

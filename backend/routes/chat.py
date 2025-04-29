@@ -8,7 +8,7 @@ import uuid
 from datetime import datetime
 import httpx
 
-from backend.schemas import ChatRequest, ChatResponse
+from ..schemas import ChatRequest, ChatResponse
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
