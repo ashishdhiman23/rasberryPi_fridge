@@ -26,10 +26,9 @@ def check_openai_key():
 
 
 def main():
-    # Change to the backend directory
-    backend_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 
-                              "backend")
-    os.chdir(backend_dir)
+    # Change to the project root directory
+    project_root = os.path.dirname(os.path.abspath(__file__))
+    os.chdir(project_root)
     
     # Check for OpenAI API key
     if not check_openai_key():
@@ -46,7 +45,7 @@ def main():
     # Run the backend server
     try:
         # Using sys.executable ensures we use the same Python interpreter
-        subprocess.run([sys.executable, "main.py"], check=True)
+        subprocess.run([sys.executable, "-m", "uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"], check=True)
     except KeyboardInterrupt:
         print("\n\033[92mServer stopped\033[0m")
     except Exception as e:
