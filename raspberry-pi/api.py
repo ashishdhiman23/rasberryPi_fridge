@@ -5,6 +5,7 @@ Handles sending data to the backend API.
 import requests
 import logging
 import time
+import base64
 from config import UPLOAD_ENDPOINT, UPLOAD_RETRY_DELAY, MAX_UPLOAD_RETRIES
 
 # Configure logging
@@ -18,7 +19,7 @@ logger = logging.getLogger('api')
 
 def upload_data(sensor_data, image_base64):
     """
-    Upload sensor data and captured image to the API
+    Upload sensor data and captured image to the API using multipart/form-data
     
     Args:
         sensor_data (dict): Dictionary with temperature, humidity, and gas readings
@@ -31,23 +32,40 @@ def upload_data(sensor_data, image_base64):
         logger.error("No image data to upload")
         return False
     
-    # Prepare the data payload
-    payload = {
-        "temp": sensor_data["temp"],
-        "humidity": sensor_data["humidity"],
-        "gas": sensor_data["gas"],
-        "image_base64": image_base64
-    }
-    
     # Try to upload with retries
     for attempt in range(MAX_UPLOAD_RETRIES):
         try:
             logger.info(f"Uploading data to {UPLOAD_ENDPOINT} (Attempt {attempt + 1}/{MAX_UPLOAD_RETRIES})")
             
+            # Convert base64 string to binary data for more efficient transfer
+            try:
+                # Remove 'data:image/jpeg;base64,' prefix if present
+                if ';base64,' in image_base64:
+                    image_base64 = image_base64.split(';base64,')[1]
+                
+                # Decode base64 to binary
+                image_binary = base64.b64decode(image_base64)
+            except Exception as e:
+                logger.error(f"Failed to decode base64 image: {str(e)}")
+                return False
+            
+            # Create multipart/form-data payload
+            files = {
+                'image': ('fridge.jpg', image_binary, 'image/jpeg')
+            }
+            
+            # Add sensor data as form fields
+            data = {
+                'temp': str(sensor_data["temp"]),
+                'humidity': str(sensor_data["humidity"]),
+                'gas': str(sensor_data["gas"])
+            }
+            
+            # Send data using multipart/form-data
             response = requests.post(
                 UPLOAD_ENDPOINT,
-                json=payload,
-                headers={'Content-Type': 'application/json'},
+                files=files,
+                data=data,
                 timeout=30  # 30 seconds timeout
             )
             

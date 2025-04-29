@@ -1,145 +1,169 @@
 """
-Mock API module for Smart Fridge Simulator.
-Simulates uploading data to a backend API without requiring actual connection.
+Mock module to simulate uploading data to a backend API.
 """
-import time
 import json
-import random
 import logging
-import requests
+import random
+import time
 from datetime import datetime
-from simulator.config import UPLOAD_ENDPOINT, UPLOAD_RETRY_DELAY, MAX_UPLOAD_RETRIES
+from pathlib import Path
+from typing import Dict, Optional, Union
+
+import requests
+from PIL import Image
+
+from simulator.config import (
+    MAX_UPLOAD_RETRIES,
+    UPLOAD_ENDPOINT,
+    UPLOAD_RETRY_DELAY,
+)
 
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    filename='simulator.log'
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
-logger = logging.getLogger('mock_api')
+logger = logging.getLogger(__name__)
 
 
-def upload_data(sensor_data, image_base64=None, use_real_api=False):
+def upload_data(
+    sensor_data: Dict[str, float], image_path: Optional[Path] = None
+) -> bool:
     """
-    Upload sensor data and image to API
-    
+    Simulate uploading sensor data and image to the backend API.
+
     Args:
-        sensor_data (dict): Dictionary containing sensor readings
-        image_base64 (str, optional): Base64 encoded image string
-        use_real_api (bool): Whether to use the real API endpoint or simulate
-        
+        sensor_data: Dictionary containing sensor readings
+        image_path: Path to the image file (optional)
+
     Returns:
-        bool: True if upload successful (or simulated success), False otherwise
+        bool: True if upload was successful, False otherwise
     """
-    if use_real_api:
-        return upload_to_real_api(sensor_data, image_base64)
-    else:
-        return simulate_upload(sensor_data, image_base64)
+    # Add timestamp to data
+    data = sensor_data.copy()
+    data["timestamp"] = datetime.now().isoformat()
+
+    # Log the data being uploaded
+    logger.info(f"Uploading data: {data}")
+    if image_path:
+        logger.info(f"Uploading image: {image_path}")
+
+    # Simulate upload to API, with random success/failure
+    return simulate_upload() or upload_to_real_api(data, image_path)
 
 
-def simulate_upload(sensor_data, image_base64=None):
+def simulate_upload() -> bool:
     """
-    Simulate uploading data to API with random success/failure
-    
-    Args:
-        sensor_data (dict): Dictionary containing sensor readings
-        image_base64 (str, optional): Base64 encoded image string
-        
+    Simulate an API call with random success/failure.
+
     Returns:
-        bool: True if simulated upload successful, False otherwise
+        bool: True if successful, False otherwise
     """
-    logger.info("Simulating API upload...")
-    
-    # Prepare data for logging
-    upload_data = {
-        "timestamp": datetime.now().isoformat(),
-        "sensor_data": sensor_data
-    }
-    
-    if image_base64:
-        upload_data["has_image"] = True
-    
     # Simulate network delay
-    delay = random.uniform(0.5, 2.0)
-    time.sleep(delay)
-    
-    # Simulate occasional failures (10% chance)
-    if random.random() < 0.1:
-        logger.error("Simulated network error during upload")
-        return False
-    
-    # Log the data that would be sent
-    logger.info(f"Mock API upload success after {delay:.2f}s delay")
-    logger.debug(f"Data that would be sent: {json.dumps(upload_data)}")
-    
-    # Save mock data to local file for inspection
-    try:
-        with open("simulator/last_upload.json", "w") as f:
-            json.dump(upload_data, f, indent=2)
-    except Exception as e:
-        logger.warning(f"Failed to save mock upload data: {str(e)}")
-        
-    return True
+    time.sleep(random.uniform(0.5, 2.0))
+
+    # 80% chance of success
+    return random.random() < 0.8
 
 
-def upload_to_real_api(sensor_data, image_base64=None):
+def upload_to_real_api(
+    data: Dict[str, Union[float, str]], image_path: Optional[Path] = None
+) -> bool:
     """
-    Upload sensor data and image to real API endpoint
-    
+    Upload data to the real API endpoint using multipart/form-data.
+
     Args:
-        sensor_data (dict): Dictionary containing sensor readings
-        image_base64 (str, optional): Base64 encoded image string
-        
+        data: Dictionary containing sensor readings and timestamp
+        image_path: Path to the image file (optional)
+
     Returns:
-        bool: True if upload successful, False otherwise
+        bool: True if upload was successful, False otherwise
     """
-    if not image_base64:
-        logger.error("Image is required for API upload")
-        return False
-        
-    # Prepare payload to match SensorData schema
-    payload = {
-        "temp": sensor_data.get("temp"),
-        "humidity": sensor_data.get("humidity"),
-        "gas": sensor_data.get("gas"),
-        "image_base64": image_base64
-    }
-    
-    # Attempt upload with retries
-    retries = 0
-    while retries <= MAX_UPLOAD_RETRIES:
+    # Always use the multipart endpoint from config
+    api_url = UPLOAD_ENDPOINT
+
+    # Prepare the multipart form data
+    payload = {"data": json.dumps(data)}
+
+    # Add image file if provided
+    if image_path and image_path.exists():
         try:
-            logger.info(f"Uploading data to {UPLOAD_ENDPOINT}, attempt {retries+1}")
+            # Ensure the image can be opened before attempting upload
+            with Image.open(image_path) as img:
+                img_format = img.format
+                logger.debug(f"Image format: {img_format}, size: {img.size}")
             
-            response = requests.post(
-                UPLOAD_ENDPOINT,
-                json=payload,
-                headers={"Content-Type": "application/json"},
-                timeout=10
-            )
-            
-            if response.status_code == 200:
-                logger.info("Upload successful")
-                # Parse response and save for inspection
+            # Attempt to upload with retries
+            for attempt in range(MAX_UPLOAD_RETRIES):
                 try:
-                    response_data = response.json()
-                    with open("simulator/last_api_response.json", "w") as f:
-                        json.dump(response_data, f, indent=2)
-                    logger.info(f"Received {len(response_data.get('items', []))} food items and AI analysis")
-                except Exception as e:
-                    logger.warning(f"Failed to parse API response: {str(e)}")
-                return True
-            else:
-                logger.error(f"Upload failed: HTTP {response.status_code}, {response.text}")
+                    # Open file handle within the retry loop
+                    with open(image_path, "rb") as img_file:
+                        files = {
+                            "image": (
+                                image_path.name, 
+                                img_file, 
+                                f"image/{img_format.lower()}"
+                            )
+                        }
+                        
+                        response = requests.post(
+                            api_url, 
+                            data=payload, 
+                            files=files, 
+                            timeout=10
+                        )
+                    
+                    if response.status_code == 200:
+                        logger.info(f"Successfully uploaded data to {api_url}")
+                        return True
+                    else:
+                        logger.warning(
+                            f"Upload failed (attempt {attempt+1}/{MAX_UPLOAD_RETRIES}): "
+                            f"Status {response.status_code}, Response: {response.text}"
+                        )
+                except requests.exceptions.RequestException as e:
+                    logger.warning(
+                        f"Upload request failed (attempt {attempt+1}/"
+                        f"{MAX_UPLOAD_RETRIES}): {e}"
+                    )
                 
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Upload error: {str(e)}")
+                # Wait before retrying
+                if attempt < MAX_UPLOAD_RETRIES - 1:
+                    time.sleep(UPLOAD_RETRY_DELAY)
+            
+            logger.error(f"Failed to upload data after {MAX_UPLOAD_RETRIES} attempts")
+            return False
+                
+        except Exception as e:
+            logger.error(f"Error processing image for upload: {e}")
+            return False
+    else:
+        # No image to upload, just send the data
+        for attempt in range(MAX_UPLOAD_RETRIES):
+            try:
+                response = requests.post(
+                    api_url, 
+                    data=payload, 
+                    timeout=10
+                )
+                
+                if response.status_code == 200:
+                    logger.info(f"Successfully uploaded data to {api_url}")
+                    return True
+                else:
+                    logger.warning(
+                        f"Upload failed (attempt {attempt+1}/{MAX_UPLOAD_RETRIES}): "
+                        f"Status {response.status_code}, Response: {response.text}"
+                    )
+            except requests.exceptions.RequestException as e:
+                logger.warning(
+                    f"Upload request failed (attempt {attempt+1}/"
+                    f"{MAX_UPLOAD_RETRIES}): {e}"
+                )
+            
+            # Wait before retrying
+            if attempt < MAX_UPLOAD_RETRIES - 1:
+                time.sleep(UPLOAD_RETRY_DELAY)
         
-        # Increment retry counter
-        retries += 1
-        if retries <= MAX_UPLOAD_RETRIES:
-            logger.info(f"Retrying in {UPLOAD_RETRY_DELAY} seconds...")
-            time.sleep(UPLOAD_RETRY_DELAY)
-    
-    logger.error(f"Upload failed after {MAX_UPLOAD_RETRIES} retries")
-    return False 
+        logger.error(f"Failed to upload data after {MAX_UPLOAD_RETRIES} attempts")
+        return False 

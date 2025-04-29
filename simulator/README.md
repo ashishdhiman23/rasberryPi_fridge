@@ -9,6 +9,7 @@ A simulation environment for testing the Smart Fridge monitoring system without 
 - Supports both mock API uploads and real API endpoint integration
 - Configurable monitoring and image capture intervals
 - Random variation and occasional simulated failures to test error handling
+- Supports custom fridge images
 
 ## Installation
 
@@ -54,6 +55,22 @@ python simulator.py --interval 10 --image-interval 60 --real-api
 - Sensor readings and image data are logged to `simulator.log`
 - Mock images are saved to the `simulator/mock_images/` directory
 - The most recent mock upload data is saved to `simulator/last_upload.json`
+
+## Using Custom Images
+
+You can add your own refrigerator images to be used by the simulator:
+
+1. Place your custom images in the `simulator/mock_images/` directory
+2. Ensure the image filenames do NOT start with `fridge_` (this prefix is used for generated images)
+3. Supported formats: `.jpg`, `.jpeg`, `.png`
+
+When custom images are present, the simulator will randomly select one of your images instead of generating synthetic ones. If no custom images are found, it falls back to generating synthetic images.
+
+Example:
+```
+simulator/mock_images/my_fridge1.jpg
+simulator/mock_images/refrigerator_photo.png
+```
 
 ## Integration with Backend
 

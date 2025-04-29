@@ -25,11 +25,27 @@ os.makedirs(MOCK_IMAGE_PATH, exist_ok=True)
 
 # Store the last generated image path
 last_image_path = None
+# Track if we should use custom images
+use_custom_images = True
 
 
 def initialize_camera():
     """Mock initialization of camera"""
     logger.info("Initializing mock camera...")
+    
+    # Check if custom images are available
+    global use_custom_images
+    custom_images = [f for f in os.listdir(MOCK_IMAGE_PATH) 
+                    if f.lower().endswith(('.jpg', '.jpeg', '.png')) 
+                    and not f.startswith('fridge_')]
+    
+    if custom_images:
+        logger.info(f"Found {len(custom_images)} custom images in {MOCK_IMAGE_PATH}")
+        use_custom_images = True
+    else:
+        logger.info(f"No custom images found in {MOCK_IMAGE_PATH}, will generate synthetic images")
+        use_custom_images = False
+    
     logger.info("Mock camera initialized successfully")
     return True
 
@@ -143,6 +159,36 @@ def generate_mock_fridge_image():
     return img
 
 
+def get_custom_image():
+    """
+    Get a random custom image from the mock_images directory
+    
+    Returns:
+        PIL.Image: A custom image from the mock_images directory or None if no custom images exist
+    """
+    # Get list of custom images (files that don't start with 'fridge_')
+    custom_images = [f for f in os.listdir(MOCK_IMAGE_PATH) 
+                    if f.lower().endswith(('.jpg', '.jpeg', '.png')) 
+                    and not f.startswith('fridge_')]
+    
+    if not custom_images:
+        logger.warning("No custom images found")
+        return None
+    
+    # Select a random custom image
+    custom_image = random.choice(custom_images)
+    image_path = os.path.join(MOCK_IMAGE_PATH, custom_image)
+    
+    try:
+        # Open and return the image
+        img = Image.open(image_path)
+        logger.info(f"Using custom image: {custom_image}")
+        return img
+    except Exception as e:
+        logger.error(f"Error opening custom image {custom_image}: {str(e)}")
+        return None
+
+
 def capture_image():
     """
     Generate a mock fridge image and return as base64 string
@@ -150,7 +196,7 @@ def capture_image():
     Returns:
         str: Base64 encoded image or None if capture fails
     """
-    global last_image_path
+    global last_image_path, use_custom_images
     
     try:
         logger.info("Capturing mock fridge image...")
@@ -160,8 +206,14 @@ def capture_image():
             logger.error("Simulating camera failure")
             return None
         
-        # Generate synthetic image
-        img = generate_mock_fridge_image()
+        # Try to use custom image first if enabled
+        img = None
+        if use_custom_images:
+            img = get_custom_image()
+        
+        # Fall back to synthetic image if no custom image available
+        if img is None:
+            img = generate_mock_fridge_image()
         
         # Save image to file with timestamp
         timestamp = time.strftime("%Y%m%d_%H%M%S")
