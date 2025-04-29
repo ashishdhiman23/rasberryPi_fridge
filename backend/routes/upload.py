@@ -72,10 +72,18 @@ async def upload_fridge_data(sensor_data: SensorData):
     Returns the processed fridge status
     """
     try:
+        # Check if debug mode is enabled (not part of schema, but can be in request body)
+        debug_mode = False
+        if hasattr(sensor_data, "__dict__") and "debug" in sensor_data.__dict__:
+            debug_mode = sensor_data.__dict__["debug"]
+            
         # Step 1: Detect food items with GPT-4 Vision
         logger.info("Processing image with Vision API")
         items = await vision_service.detect_food_items(sensor_data.image_base64)
         
+        if debug_mode:
+            logger.info(f"Vision API detected items: {items}")
+            
         # Step 2: Analyze data with FridgeAgent
         logger.info("Analyzing data with FridgeAgent")
         analysis = await fridge_agent.analyze(

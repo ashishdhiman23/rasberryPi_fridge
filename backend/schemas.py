@@ -8,6 +8,7 @@ class SensorData(BaseModel):
     humidity: float = Field(..., description="Humidity percentage", example=62)
     gas: int = Field(..., description="Gas level in ppm", example=190)
     image_base64: str = Field(..., description="Base64 encoded fridge image")
+    debug: Optional[bool] = Field(False, description="Enable debug mode for additional logging")
 
 class FridgeStatusResponse(BaseModel):
     """Schema for the fridge status response"""
