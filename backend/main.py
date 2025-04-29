@@ -66,6 +66,25 @@ async def status():
         }
     }
 
+# Endpoint for the frontend to get fridge status
+@app.get("/api/fridge-status")
+async def fridge_status():
+    # Return mock fridge status data for now
+    return {
+        "temp": 4.2,
+        "humidity": 52.3,
+        "gas": 125,
+        "items": ["milk", "eggs", "cheese", "yogurt", "leftovers"],
+        "priority": ["milk (expires soon)", "leftovers (3d old)"],
+        "analysis": {
+            "freshness": "All items appear fresh",
+            "safety": "Temperature is in the safe range (2-5°C)",
+            "fill_level": "Fridge is 60% full",
+            "recommendations": "Consider consuming milk soon"
+        },
+        "timestamp": datetime.now().isoformat()
+    }
+
 # Simple upload endpoint that matches the simulator's expected endpoint
 @app.post("/api/upload/multipart")
 async def upload_multipart(
