@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 from routes.upload import router as upload_router
 from routes.status import router as status_router
 from routes.notifications import router as notifications_router
+from routes.chat import router as chat_router
 
 # Load environment variables from .env file
 load_dotenv()
@@ -20,7 +21,8 @@ if not os.getenv("OPENAI_API_KEY"):
 # Create FastAPI app
 app = FastAPI(
     title="Smart Fridge AI API",
-    description="Backend API for Smart Fridge system with GPT-4 Vision and multiple OpenAI Assistants",
+    description="Backend API for Smart Fridge system with GPT-4 Vision and "
+                "multiple OpenAI Assistants",
     version="1.0.0"
 )
 
@@ -41,6 +43,7 @@ app.add_middleware(
 app.include_router(upload_router, prefix="/api")
 app.include_router(status_router, prefix="/api")
 app.include_router(notifications_router, prefix="/api")
+app.include_router(chat_router, prefix="/api")
 
 # Root endpoint
 @app.get("/")
