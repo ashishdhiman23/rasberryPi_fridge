@@ -2,7 +2,12 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 import os
+import sys
+from pathlib import Path
 from dotenv import load_dotenv
+
+# Add the backend directory to the Python path
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from routes.upload import router as upload_router
 from routes.status import router as status_router
