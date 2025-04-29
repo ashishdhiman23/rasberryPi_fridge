@@ -1,15 +1,28 @@
-from fastapi import FastAPI, APIRouter, File, UploadFile, Form
+from fastapi import FastAPI, APIRouter, File, UploadFile, Form, Body
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 import os
 import json
 import base64
-from typing import Optional
+from typing import Optional, Dict, Any
 from datetime import datetime
+from pydantic import BaseModel
+import httpx
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
 load_dotenv()
+
+# Define Pydantic models for request/response
+class ChatRequest(BaseModel):
+    user_message: str
+    session_id: Optional[str] = None
+
+class ChatResponse(BaseModel):
+    response: str
+    status: str
+    timestamp: str
+    session_id: Optional[str] = None
 
 # Create FastAPI app
 app = FastAPI(
@@ -84,6 +97,86 @@ async def fridge_status():
         },
         "timestamp": datetime.now().isoformat()
     }
+
+# Chat endpoint for conversing with the fridge
+@app.post("/api/chat", response_model=ChatResponse)
+async def chat(request: ChatRequest):
+    try:
+        # Get the last fridge status to provide context to the model
+        fridge_data = {
+            "temp": 4.2,
+            "humidity": 52.3,
+            "gas": 125,
+            "items": ["milk", "eggs", "cheese", "yogurt", "leftovers"],
+        }
+        
+        # Get OpenAI API key from environment
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            print("WARNING: OPENAI_API_KEY not found in environment variables")
+            return {
+                "response": "I'm sorry, but I'm not able to process your request right now due to configuration issues.",
+                "status": "error",
+                "timestamp": datetime.now().isoformat(),
+                "session_id": request.session_id
+            }
+            
+        # Create a system prompt with the fridge information
+        system_prompt = f"""
+        You are a helpful assistant for a Smart Fridge. You can answer questions about the contents
+        of the fridge and provide recommendations based on the current inventory.
+        
+        Current fridge status:
+        - Temperature: {fridge_data['temp']}°C
+        - Humidity: {fridge_data['humidity']}%
+        - Gas Level: {fridge_data['gas']} PPM
+        - Food items: {', '.join(fridge_data['items'])}
+        
+        Be helpful, concise, and natural in your responses. If the user asks about food items not in the
+        fridge, you can politely inform them that those items aren't currently detected.
+        """
+        
+        # Call OpenAI API for chat completion
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(
+                "https://api.openai.com/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "model": "gpt-4",
+                    "messages": [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": request.user_message}
+                    ],
+                    "max_tokens": 500
+                }
+            )
+            
+            # Check for errors
+            response.raise_for_status()
+            result = response.json()
+            
+            # Extract assistant's response
+            assistant_response = result["choices"][0]["message"]["content"]
+            
+            # Return the response
+            return {
+                "response": assistant_response,
+                "status": "ok",
+                "timestamp": datetime.now().isoformat(),
+                "session_id": request.session_id
+            }
+            
+    except Exception as e:
+        print(f"Error in chat endpoint: {str(e)}")
+        return {
+            "response": "I'm sorry, but I'm having trouble understanding right now. Please try again later.",
+            "status": "error",
+            "timestamp": datetime.now().isoformat(),
+            "session_id": request.session_id
+        }
 
 # Simple upload endpoint that matches the simulator's expected endpoint
 @app.post("/api/upload/multipart")

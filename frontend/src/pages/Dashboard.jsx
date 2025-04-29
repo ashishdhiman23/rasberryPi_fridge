@@ -3,6 +3,7 @@ import { fetchFridgeStatus } from '../utils/api';
 import SensorCard from '../components/SensorCard';
 import FoodItem from '../components/FoodItem';
 import AiAnalysisTabs from '../components/AiAnalysisTabs';
+import ChatInterface from '../components/ChatInterface';
 
 /**
  * Helper function to determine sensor status based on values
@@ -34,6 +35,7 @@ const Dashboard = () => {
   const [fridgeData, setFridgeData] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [showChat, setShowChat] = useState(false);
 
   // Fetch data on component mount
   useEffect(() => {
@@ -91,14 +93,30 @@ const Dashboard = () => {
   return (
     <div className="min-h-screen bg-gray-50 py-6 px-4 sm:px-6 lg:px-8">
       <div className="max-w-4xl mx-auto">
-        <header className="mb-6">
-          <h1 className="text-2xl font-bold text-gray-900">Smart Fridge Dashboard</h1>
-          {fridgeData?.timestamp && (
-            <p className="text-sm text-gray-500">
-              Last updated: {new Date(fridgeData.timestamp).toLocaleString()}
-            </p>
-          )}
+        <header className="mb-6 flex justify-between items-center">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Smart Fridge Dashboard</h1>
+            {fridgeData?.timestamp && (
+              <p className="text-sm text-gray-500">
+                Last updated: {new Date(fridgeData.timestamp).toLocaleString()}
+              </p>
+            )}
+          </div>
+          <button
+            className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            onClick={() => setShowChat(!showChat)}
+          >
+            {showChat ? 'Hide Chat' : 'Chat with Fridge'}
+          </button>
         </header>
+
+        {/* Chat Interface - conditionally rendered */}
+        {showChat && (
+          <section className="mb-8">
+            <h2 className="text-lg font-semibold text-gray-700 mb-3">Chat with Your Fridge</h2>
+            <ChatInterface fridgeData={fridgeData} />
+          </section>
+        )}
 
         {/* Sensor Cards */}
         <section className="mb-8">
