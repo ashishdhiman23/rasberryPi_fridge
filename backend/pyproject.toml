@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "smart-fridge-backend"
+version = "1.0.0"
+description = "Smart Fridge Backend API"
+requires-python = ">=3.7"
+dependencies = [
+    "fastapi",
+    "uvicorn",
+    "python-dotenv",
+    "httpx",
+    "python-multipart",
+    "pillow",
+    "pydantic",
+] 
