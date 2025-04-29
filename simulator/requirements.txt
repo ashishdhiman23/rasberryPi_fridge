@@ -8,6 +8,16 @@ flask==2.2.2
 pillow==9.3.0
 numpy==1.23.5
 
+# For API and chat features
+fastapi==0.95.1
+uvicorn==0.21.1
+pydantic==1.10.7
+httpx==0.24.0
+python-multipart==0.0.6
+
+# For OpenAI API integration
+openai==0.27.8
+
 # For mock hardware (not used but included for reference)
 # These would be needed on actual Raspberry Pi hardware
 # RPi.GPIO==0.7.1
