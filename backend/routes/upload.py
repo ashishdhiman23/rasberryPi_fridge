@@ -67,6 +67,7 @@ async def upload_fridge_data(sensor_data: SensorData):
     - Processes the image using GPT-4 Vision to detect food items
     - Analyzes the data using FridgeAgent
     - Saves the results to the fridge log
+    - Creates notifications for important events
     
     Returns the processed fridge status
     """
@@ -93,16 +94,73 @@ async def upload_fridge_data(sensor_data: SensorData):
             "gas": sensor_data.gas,
             "items": items,
             "ai_response": analysis.get("ai_response"),
-            "priority": analysis.get("priority", ["safety", "freshness", "recipes"]),
+            "priority": analysis.get("priority", ["safety", "expiration", "freshness", "recipes"]),
             "analysis": analysis.get("analysis", {
                 "safety": "Analysis not available.",
                 "freshness": "Analysis not available.",
-                "recipes": "Analysis not available."
+                "recipes": "Analysis not available.",
+                "expiration": "Analysis not available."
             })
         }
         
         # Step 4: Save the fridge status to the log file
         await save_fridge_log(fridge_status)
+        
+        # Step 5: Generate notifications based on analysis
+        try:
+            from routes.notifications import create_notification
+            
+            # Safety notifications (high priority)
+            safety_analysis = fridge_status["analysis"].get("safety", "")
+            if "🚨" in safety_analysis:
+                # Danger notification (priority 1)
+                create_notification(
+                    type="alert",
+                    title="Safety Alert: Fridge Condition Critical",
+                    message=safety_analysis,
+                    priority=1
+                )
+            elif "🟡" in safety_analysis:
+                # Warning notification (priority 2)
+                create_notification(
+                    type="alert",
+                    title="Safety Warning: Fridge Needs Attention",
+                    message=safety_analysis,
+                    priority=2
+                )
+            
+            # Expiration notifications (medium priority)
+            expiration_analysis = fridge_status["analysis"].get("expiration", "")
+            if "🚨" in expiration_analysis:
+                # Expired items notification
+                create_notification(
+                    type="expiry",
+                    title="Food Expired: Immediate Attention Required",
+                    message=expiration_analysis,
+                    priority=1
+                )
+            elif "🟡" in expiration_analysis and "Expiring Soon" in expiration_analysis:
+                # Expiring soon notification
+                create_notification(
+                    type="expiry",
+                    title="Items Expiring Soon",
+                    message=expiration_analysis,
+                    priority=2
+                )
+            
+            # Freshness notifications (lower priority)
+            freshness_analysis = fridge_status["analysis"].get("freshness", "")
+            if any(term in freshness_analysis.lower() for term in ["consume", "soon", "use", "old"]):
+                create_notification(
+                    type="info",
+                    title="Freshness Update",
+                    message=freshness_analysis,
+                    priority=3
+                )
+            
+            logger.info("Generated notifications from analysis")
+        except Exception as e:
+            logger.error(f"Error generating notifications: {str(e)}")
         
         return fridge_status
         

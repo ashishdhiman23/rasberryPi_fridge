@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 
 from routes.upload import router as upload_router
 from routes.status import router as status_router
+from routes.notifications import router as notifications_router
 
 # Load environment variables from .env file
 load_dotenv()
@@ -39,6 +40,7 @@ app.add_middleware(
 # Include API routes
 app.include_router(upload_router, prefix="/api")
 app.include_router(status_router, prefix="/api")
+app.include_router(notifications_router, prefix="/api")
 
 # Root endpoint
 @app.get("/")
@@ -49,7 +51,9 @@ async def root():
         "features": [
             "GPT-4 Vision food detection",
             "Multi-agent system with specialized agents",
-            "Safety, freshness, and recipe analysis"
+            "Safety, freshness, and recipe analysis",
+            "Expiration date tracking",
+            "Real-time notifications"
         ]
     }
 

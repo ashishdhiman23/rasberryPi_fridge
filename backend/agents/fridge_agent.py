@@ -327,31 +327,35 @@ class RecipeAgent(AgentSystem):
 
 
 class GuardrailAgent(AgentSystem):
-    """Agent that verifies and ensures safety of all recommendations"""
+    """Guardrail agent to ensure proper response format and quality"""
     
     def __init__(self, api_key: Optional[str] = None, model: str = "gpt-4"):
         super().__init__(api_key, model)
         
         instructions = """
-        You are a Food Safety Guardrail that reviews and verifies all recommendations.
+        You are a Guardrail Agent for a Smart Fridge AI system.
         
-        Your responsibilities:
-        1. Review input data and agent outputs for safety concerns
-        2. Verify that temperature, humidity, and gas readings are interpreted correctly
-        3. Ensure food safety is prioritized in all recommendations
-        4. Override any suggestions that could pose health risks
+        Your job is to:
+        1. Ensure that all analyses are properly formatted and consistent
+        2. Combine all analyses into a coherent summary response
+        3. Flag any inappropriate content and replace it with appropriate text
+        4. Maintain a consistent, helpful tone across all responses
         
-        Rules to enforce:
-        - Temperature must be 0-5°C (warn if outside this range)
-        - Gas levels above 300 ppm require immediate attention
-        - Never recommend consuming food that might be spoiled
-        - Never provide medical advice
+        The analysis should include sections for:
+        - Safety - About temperature, humidity, and gas conditions
+        - Freshness - About the freshness of food items
+        - Recipes - Suggested recipes based on available ingredients
+        - Expiration - Information about items that may be expiring soon
         
-        Flag any recommendations that violate these rules and provide safer alternatives.
-        Be the final authority on food safety matters.
+        Decide which priority to assign based on the content and urgency:
+        - If there are safety concerns, "safety" should be first
+        - If items are expiring, "expiration" should be high priority
+        - Otherwise, arrange in a logical order that highlights actionable items first
+        
+        Always return 4 analysis sections, even if the input is missing some.
         """
         
-        self.create_assistant("Food Safety Guardrail", instructions)
+        self.create_assistant("Guardrail Agent", instructions)
     
     async def validate_analysis(
         self, 
@@ -361,66 +365,90 @@ class GuardrailAgent(AgentSystem):
         items: List[str],
         analysis: Dict
     ) -> Dict:
-        """Validate analysis results from other agents"""
+        """Validate and improve the analysis from other agents"""
         if not self.client or not self.assistant_id:
-            return {"ai_response": "AI analysis validation unavailable"}
+            return {
+                "ai_response": "Smart Fridge AI analysis ready",
+                "priority": ["safety", "expiration", "freshness", "recipes"],
+                "analysis": analysis
+            }
         
         thread = self.create_thread()
         if not thread:
-            return {"ai_response": "AI analysis validation unavailable"}
+            return {
+                "ai_response": "Smart Fridge AI analysis ready",
+                "priority": ["safety", "expiration", "freshness", "recipes"],
+                "analysis": analysis
+            }
         
-        # Format the input data and analysis for review
-        items_text = ", ".join(items) if items else "No items detected"
-        analysis_text = json.dumps(analysis, indent=2)
-        
+        # Create the input prompt
         prompt = f"""
-        Please review these refrigerator conditions and agent analyses for safety:
+        Please review and validate the following Smart Fridge analysis:
         
-        SENSOR DATA:
-        Temperature: {temp}°C
-        Humidity: {humidity}%
-        Gas Level: {gas} ppm
-        Food Items: {items_text}
+        Fridge Data:
+        - Temperature: {temp}°C
+        - Humidity: {humidity}%
+        - Gas Level: {gas} ppm
+        - Detected Items: {", ".join(items) if items else "None"}
         
-        AGENT ANALYSES:
-        {analysis_text}
+        Analysis Results:
+        - Safety: {analysis.get('safety', 'Not available')}
+        - Freshness: {analysis.get('freshness', 'Not available')}
+        - Recipes: {analysis.get('recipes', 'Not available')}
+        - Expiration: {analysis.get('expiration', 'Not available')}
         
-        Please provide:
-        1. A priority alert or recommendation (ai_response)
-        2. Validation of the analysis results
-        3. Any safety overrides if necessary
-        
-        Return only a validated ai_response that addresses the most important issue.
+        Please:
+        1. Check if all analyses are appropriate and well-formatted
+        2. Create a concise AI response summarizing the key findings
+        3. Determine the priority order for displaying the analyses
+        4. Return a JSON object with ai_response, priority, and analysis keys
         """
         
         self.add_message(thread.id, prompt)
         run = self.run_assistant(thread.id)
         
         if run:
-            self.wait_for_run(thread.id, run.id)
+            self.wait_for_run(thread.id, run.id, timeout=60.0)
             response = self.get_last_response(thread.id)
-            return {"ai_response": response or "Analysis validation failed"}
+            
+            # Try to extract a JSON object from the response
+            try:
+                import re
+                json_match = re.search(r'```json\s*(.*?)\s*```', response, re.DOTALL)
+                if json_match:
+                    result = json.loads(json_match.group(1))
+                    return result
+                
+                # If no JSON found, build our own response
+                return {
+                    "ai_response": response or "Smart Fridge AI analysis ready",
+                    "priority": ["safety", "expiration", "freshness", "recipes"],
+                    "analysis": analysis
+                }
+            except Exception as e:
+                logger.error(f"Error parsing guardrail response: {str(e)}")
         
-        return {"ai_response": "Analysis validation unavailable"}
+        # Default response if anything fails
+        return {
+            "ai_response": "Smart Fridge AI analysis ready",
+            "priority": ["safety", "expiration", "freshness", "recipes"],
+            "analysis": analysis
+        }
 
 
 class FridgeAgent:
-    """
-    FridgeAgent is a multi-agent system that coordinates specialized agents
-    to analyze fridge data and provide insights on safety, freshness, and recipes.
-    """
+    """Main agent coordination class for Smart Fridge"""
     
     def __init__(self, api_key: Optional[str] = None):
-        """Initialize the agent system with OpenAI API key"""
-        self.api_key = api_key or os.getenv("OPENAI_API_KEY")
-        if not self.api_key:
-            logger.warning("OPENAI_API_KEY not found. FridgeAgent will not work.")
+        """Initialize the Fridge Agent system"""
+        self.safety_agent = SafetyAgent(api_key)
+        self.freshness_agent = FreshnessAgent(api_key)
+        self.recipe_agent = RecipeAgent(api_key)
+        self.guardrail_agent = GuardrailAgent(api_key)
         
-        # Initialize specialized agents
-        self.safety_agent = SafetyAgent(api_key=self.api_key)
-        self.freshness_agent = FreshnessAgent(api_key=self.api_key)
-        self.recipe_agent = RecipeAgent(api_key=self.api_key)
-        self.guardrail_agent = GuardrailAgent(api_key=self.api_key)
+        # Import here to avoid circular imports
+        from agents.expiration_agent import expiration_tracker
+        self.expiration_tracker = expiration_tracker
     
     async def analyze(
         self, 
@@ -430,92 +458,56 @@ class FridgeAgent:
         items: List[str]
     ) -> Dict:
         """
-        Analyze the fridge data using a multi-agent approach
+        Analyze fridge data and produce insights
         
         Args:
             temp: Temperature in Celsius
             humidity: Humidity percentage
-            gas: Gas level in ppm
+            gas: Gas level in PPM
             items: List of detected food items
             
         Returns:
-            Dict with analysis results from all agents after guardrail validation
+            Dict with analysis results
         """
-        # Default response in case of failure
-        default_response = {
-            "ai_response": "AI analysis unavailable",
-            "priority": ["safety", "freshness", "recipes"],
-            "analysis": {
-                "safety": "Analysis unavailable",
-                "freshness": "Analysis unavailable",
-                "recipes": "Analysis unavailable"
-            }
+        logger.info(f"Analyzing fridge data: Temp={temp}°C, Humidity={humidity}%, Gas={gas}ppm")
+        logger.info(f"Detected items: {items}")
+        
+        # Run all analyses in parallel
+        safety_result = await self.safety_agent.analyze_safety(temp, humidity, gas)
+        freshness_result = await self.freshness_agent.analyze_freshness(items)
+        recipe_result = await self.recipe_agent.suggest_recipes(items)
+        
+        # Add expiration tracking and analysis
+        expiration_result = await self.expiration_tracker.get_expiration_analysis(items)
+        
+        # Combine all analysis results
+        analysis = {
+            "safety": safety_result.get("safety", "Safety analysis unavailable"),
+            "freshness": freshness_result.get("freshness", "Freshness analysis unavailable"),
+            "recipes": recipe_result.get("recipes", "Recipe suggestions unavailable"),
+            "expiration": expiration_result.get("expiration", "Expiration tracking unavailable")
         }
         
-        try:
-            # Run specialized analyses in parallel (if using Python 3.7+)
-            import asyncio
-            
-            # Step 1: Get safety analysis
-            safety_task = asyncio.create_task(
-                self.safety_agent.analyze_safety(temp, humidity, gas)
-            )
-            
-            # Step 2: Get freshness analysis
-            freshness_task = asyncio.create_task(
-                self.freshness_agent.analyze_freshness(items)
-            )
-            
-            # Step 3: Get recipe suggestions
-            recipe_task = asyncio.create_task(
-                self.recipe_agent.suggest_recipes(items)
-            )
-            
-            # Wait for all tasks to complete
-            safety_result = await safety_task
-            freshness_result = await freshness_task
-            recipe_result = await recipe_task
-            
-            # Combine results
-            analysis = {
-                **safety_result,
-                **freshness_result,
-                **recipe_result
-            }
-            
-            # Determine priority based on results
-            # Simple logic: if there's a safety concern, prioritize safety
-            priority = ["safety", "freshness", "recipes"]
-            
-            safety_text = safety_result.get("safety", "").lower()
-            if "danger" in safety_text or "warning" in safety_text or "🚨" in safety_text:
-                priority = ["safety", "freshness", "recipes"]
-            elif "caution" in safety_text or "🟡" in safety_text:
-                priority = ["safety", "freshness", "recipes"]
-            else:
-                # If no safety concerns, maybe prioritize freshness
-                freshness_text = freshness_result.get("freshness", "").lower()
-                if "soon" in freshness_text or "old" in freshness_text or "expire" in freshness_text:
-                    priority = ["freshness", "safety", "recipes"]
-                else:
-                    # Otherwise, recipes can be first
-                    priority = ["recipes", "freshness", "safety"]
-            
-            # Step 4: Run everything through the guardrail
-            guardrail_result = await self.guardrail_agent.validate_analysis(
-                temp, humidity, gas, items, analysis
-            )
-            
-            # Return the final result
-            return {
-                "ai_response": guardrail_result.get("ai_response", "Analysis complete"),
-                "priority": priority,
-                "analysis": analysis
-            }
-            
-        except Exception as e:
-            logger.error(f"Error in multi-agent analysis: {str(e)}")
-            return default_response
+        # Run the guardrail to ensure proper formatting and quality
+        result = await self.guardrail_agent.validate_analysis(
+            temp=temp,
+            humidity=humidity,
+            gas=gas,
+            items=items,
+            analysis=analysis
+        )
+        
+        # Set default priority
+        if "priority" not in result:
+            # Include expiration in the priority list
+            result["priority"] = ["safety", "expiration", "freshness", "recipes"]
+        elif "expiration" not in result["priority"]:
+            # Insert expiration after safety if it's not already in the list
+            safety_index = result["priority"].index("safety") if "safety" in result["priority"] else 0
+            result["priority"].insert(safety_index + 1, "expiration")
+        
+        logger.info("Analysis completed successfully")
+        return result
 
 # Create a singleton instance
 fridge_agent = FridgeAgent() 

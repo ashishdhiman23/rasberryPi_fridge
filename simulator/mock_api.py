@@ -93,16 +93,17 @@ def upload_to_real_api(sensor_data, image_base64=None):
     Returns:
         bool: True if upload successful, False otherwise
     """
-    # Prepare payload
+    if not image_base64:
+        logger.error("Image is required for API upload")
+        return False
+        
+    # Prepare payload to match SensorData schema
     payload = {
-        "timestamp": datetime.now().isoformat(),
-        "temperature": sensor_data.get("temp"),
+        "temp": sensor_data.get("temp"),
         "humidity": sensor_data.get("humidity"),
-        "gas_level": sensor_data.get("gas")
+        "gas": sensor_data.get("gas"),
+        "image_base64": image_base64
     }
-    
-    if image_base64:
-        payload["image"] = image_base64
     
     # Attempt upload with retries
     retries = 0
@@ -119,6 +120,14 @@ def upload_to_real_api(sensor_data, image_base64=None):
             
             if response.status_code == 200:
                 logger.info("Upload successful")
+                # Parse response and save for inspection
+                try:
+                    response_data = response.json()
+                    with open("simulator/last_api_response.json", "w") as f:
+                        json.dump(response_data, f, indent=2)
+                    logger.info(f"Received {len(response_data.get('items', []))} food items and AI analysis")
+                except Exception as e:
+                    logger.warning(f"Failed to parse API response: {str(e)}")
                 return True
             else:
                 logger.error(f"Upload failed: HTTP {response.status_code}, {response.text}")

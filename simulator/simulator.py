@@ -89,8 +89,9 @@ def monitoring_cycle():
                    f"Humidity={sensor_data['humidity']}%, "
                    f"Gas={sensor_data['gas']} PPM")
         
-        # Decide if we need to capture an image
-        capture_now = current_time - last_image_capture >= IMAGE_CAPTURE_INTERVAL
+        # For real API, always capture an image as it's required
+        # For mock API, follow the normal image capture interval
+        capture_now = use_real_api or (current_time - last_image_capture >= IMAGE_CAPTURE_INTERVAL)
         
         if capture_now:
             # Capture image
@@ -107,12 +108,12 @@ def monitoring_cycle():
                     logger.error("Monitoring cycle completed with upload errors")
             else:
                 logger.error("Monitoring cycle failed - image capture error")
-                # Try to upload just the sensor data without image
-                if mock_api.upload_data(sensor_data, None, use_real_api):
+                # Try to upload just the sensor data without image if not using real API
+                if not use_real_api and mock_api.upload_data(sensor_data, None, False):
                     logger.info("Uploaded sensor data only (no image)")
         else:
-            # Upload just sensor data without image
-            if mock_api.upload_data(sensor_data, None, use_real_api):
+            # Upload just sensor data without image (only for mock API)
+            if mock_api.upload_data(sensor_data, None, False):
                 next_image = last_image_capture + IMAGE_CAPTURE_INTERVAL - current_time
                 logger.info(f"Monitoring cycle completed successfully. "
                            f"Next image in {next_image:.1f} seconds")

@@ -52,28 +52,76 @@ def generate_mock_fridge_image():
             [(0, shelf_y), (MOCK_IMAGE_WIDTH, shelf_y + 10)], 
             fill=(200, 200, 210)
         )
+    
+    # Common food items with colors
+    common_foods = [
+        {"name": "milk", "color": (250, 250, 250), "size": (60, 120)},
+        {"name": "orange juice", "color": (255, 180, 0), "size": (60, 120)},
+        {"name": "apple", "color": (220, 0, 0), "size": (50, 50)},
+        {"name": "orange", "color": (255, 165, 0), "size": (50, 50)},
+        {"name": "yogurt", "color": (250, 250, 240), "size": (40, 60)},
+        {"name": "cheese", "color": (255, 255, 150), "size": (80, 40)},
+        {"name": "lettuce", "color": (100, 220, 50), "size": (100, 60)},
+        {"name": "tomato", "color": (220, 60, 50), "size": (45, 45)},
+        {"name": "carrot", "color": (250, 160, 0), "size": (30, 100)},
+        {"name": "eggs", "color": (255, 250, 240), "size": (100, 50)},
+        {"name": "butter", "color": (250, 230, 140), "size": (70, 40)},
+        {"name": "leftover pasta", "color": (230, 230, 200), "size": (90, 70)},
+        {"name": "chicken", "color": (240, 220, 180), "size": (100, 60)},
+        {"name": "broccoli", "color": (50, 180, 50), "size": (70, 70)},
+        {"name": "soda", "color": (150, 150, 150), "size": (45, 110)},
+        {"name": "cucumber", "color": (100, 180, 80), "size": (40, 120)},
+        {"name": "bell pepper", "color": (200, 50, 50), "size": (60, 60)},
+        {"name": "ketchup", "color": (200, 30, 30), "size": (50, 100)}
+    ]
+    
+    # Randomly select food items to place on each shelf
+    foods_placed = []
+    
+    for shelf_y in range(150, MOCK_IMAGE_HEIGHT, 150):
+        shelf_items = random.randint(2, 5)  # 2-5 items per shelf
         
-        # Add random food items on each shelf
-        num_items = random.randint(1, 5)
-        for _ in range(num_items):
-            item_x = random.randint(50, MOCK_IMAGE_WIDTH - 100)
-            item_y = shelf_y - random.randint(30, 120)
-            item_width = random.randint(40, 100)
-            item_height = random.randint(40, 100)
+        for _ in range(shelf_items):
+            # Get random food item
+            food = random.choice(common_foods)
+            foods_placed.append(food["name"])
             
-            # Random food item colors
-            item_color = (
-                random.randint(50, 250),
-                random.randint(50, 250),
-                random.randint(50, 250)
+            # Position on shelf
+            item_x = random.randint(20, MOCK_IMAGE_WIDTH - food["size"][0] - 20)
+            item_y = shelf_y - random.randint(30, min(140, food["size"][1] + 60))
+            
+            # Add some random variation to color
+            color_variation = random.randint(-20, 20)
+            food_color = tuple(
+                max(0, min(255, c + color_variation))
+                for c in food["color"]
             )
             
             # Draw food item
             draw.rectangle(
-                [(item_x, item_y), (item_x + item_width, item_y + item_height)],
-                fill=item_color,
+                [(item_x, item_y), 
+                 (item_x + food["size"][0], item_y + food["size"][1])],
+                fill=food_color,
                 outline=(30, 30, 30)
             )
+            
+            # Add label
+            try:
+                # Try to use a font, fall back to default if not available
+                font = ImageFont.truetype("arial.ttf", 12)
+                draw.text(
+                    (item_x + 5, item_y + 5),
+                    food["name"],
+                    fill=(10, 10, 10),
+                    font=font
+                )
+            except IOError:
+                # Use default font if arial is not available
+                draw.text(
+                    (item_x + 5, item_y + 5),
+                    food["name"],
+                    fill=(10, 10, 10)
+                )
     
     # Add timestamp to image
     timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
@@ -87,6 +135,9 @@ def generate_mock_fridge_image():
     
     # Add some noise and blur to make it more realistic
     img = img.filter(ImageFilter.GaussianBlur(radius=0.5))
+    
+    # Log what foods are in the image for debugging
+    logger.info(f"Generated fridge image with: {', '.join(foods_placed)}")
     
     # Return the image
     return img
