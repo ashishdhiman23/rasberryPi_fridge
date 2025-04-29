@@ -15,4 +15,7 @@ dependencies = [
     "python-multipart",
     "pillow",
     "pydantic",
-] 
+]
+
+[tool.setuptools]
+packages = ["routes", "agents", "services", "utils", "data"] 
