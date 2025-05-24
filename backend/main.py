@@ -9,6 +9,7 @@ from datetime import datetime
 from pydantic import BaseModel
 import httpx
 from dotenv import load_dotenv
+from utils.logger import log_request, log_response, log_error, log_api_call
 
 # Load environment variables from .env file
 load_dotenv()
@@ -54,7 +55,7 @@ chat_router = APIRouter()
 # Root endpoint
 @app.get("/")
 async def root():
-    return {
+    response = {
         "message": "Welcome to Smart Fridge AI API", 
         "status": "online",
         "features": [
@@ -65,11 +66,13 @@ async def root():
             "Real-time notifications"
         ]
     }
+    log_response(response, "/")
+    return response
 
 # Simple API endpoint for testing
 @app.get("/api/status")
 async def status():
-    return {
+    response = {
         "status": "online",
         "message": "API is running",
         "timestamp": datetime.now().isoformat(),
@@ -78,12 +81,13 @@ async def status():
             "python_version": os.getenv("PYTHON_VERSION", "3.x")
         }
     }
+    log_response(response, "/api/status")
+    return response
 
 # Endpoint for the frontend to get fridge status
 @app.get("/api/fridge-status")
 async def fridge_status():
-    # Return mock fridge status data for now
-    return {
+    response = {
         "temp": 4.2,
         "humidity": 52.3,
         "gas": 125,
@@ -97,11 +101,15 @@ async def fridge_status():
         },
         "timestamp": datetime.now().isoformat()
     }
+    log_response(response, "/api/fridge-status")
+    return response
 
 # Chat endpoint for conversing with the fridge
 @app.post("/api/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest):
     try:
+        log_request(request.dict(), "/api/chat")
+        
         # Get the last fridge status to provide context to the model
         fridge_data = {
             "temp": 4.2,
@@ -113,13 +121,16 @@ async def chat(request: ChatRequest):
         # Get OpenAI API key from environment
         api_key = os.getenv("OPENAI_API_KEY")
         if not api_key:
-            print("WARNING: OPENAI_API_KEY not found in environment variables")
-            return {
+            error_msg = "WARNING: OPENAI_API_KEY not found in environment variables"
+            print(error_msg)
+            response = {
                 "response": "I'm sorry, but I'm not able to process your request right now due to configuration issues.",
                 "status": "error",
                 "timestamp": datetime.now().isoformat(),
                 "session_id": request.session_id
             }
+            log_response(response, "/api/chat")
+            return response
             
         # Create a system prompt with the fridge information
         system_prompt = f"""
@@ -136,6 +147,16 @@ async def chat(request: ChatRequest):
         fridge, you can politely inform them that those items aren't currently detected.
         """
         
+        # Prepare OpenAI API request
+        openai_request = {
+            "model": "gpt-4",
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": request.user_message}
+            ],
+            "max_tokens": 500
+        }
+        
         # Call OpenAI API for chat completion
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.post(
@@ -144,15 +165,11 @@ async def chat(request: ChatRequest):
                     "Authorization": f"Bearer {api_key}",
                     "Content-Type": "application/json"
                 },
-                json={
-                    "model": "gpt-4",
-                    "messages": [
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": request.user_message}
-                    ],
-                    "max_tokens": 500
-                }
+                json=openai_request
             )
+            
+            # Log the API call
+            log_api_call("OpenAI Chat Completion", openai_request, response.json())
             
             # Check for errors
             response.raise_for_status()
@@ -161,22 +178,26 @@ async def chat(request: ChatRequest):
             # Extract assistant's response
             assistant_response = result["choices"][0]["message"]["content"]
             
-            # Return the response
-            return {
+            # Prepare and log the response
+            chat_response = {
                 "response": assistant_response,
                 "status": "ok",
                 "timestamp": datetime.now().isoformat(),
                 "session_id": request.session_id
             }
+            log_response(chat_response, "/api/chat")
+            return chat_response
             
     except Exception as e:
-        print(f"Error in chat endpoint: {str(e)}")
-        return {
+        log_error(e, "/api/chat")
+        response = {
             "response": "I'm sorry, but I'm having trouble understanding right now. Please try again later.",
             "status": "error",
             "timestamp": datetime.now().isoformat(),
             "session_id": request.session_id
         }
+        log_response(response, "/api/chat")
+        return response
 
 # Simple upload endpoint that matches the simulator's expected endpoint
 @app.post("/api/upload/multipart")
@@ -185,6 +206,13 @@ async def upload_multipart(
     image: Optional[UploadFile] = File(None)
 ):
     try:
+        # Log the incoming request
+        request_data = {
+            "data": data,
+            "image_filename": image.filename if image else None
+        }
+        log_request(request_data, "/api/upload/multipart")
+        
         # Parse the JSON data
         sensor_data = json.loads(data)
         
@@ -200,7 +228,7 @@ async def upload_multipart(
         if image:
             print(f"Received image: {image.filename}")
         
-        return {
+        response = {
             "status": "success",
             "message": "Data received and processed",
             "timestamp": datetime.now().isoformat(),
@@ -208,13 +236,17 @@ async def upload_multipart(
             "food_items": ["milk", "eggs"],
             "temperature_status": "normal" if 2 <= sensor_data.get("temp", 4) <= 5 else "warning"
         }
+        log_response(response, "/api/upload/multipart")
+        return response
     except Exception as e:
-        print(f"Error processing upload: {str(e)}")
-        return {
+        log_error(e, "/api/upload/multipart")
+        response = {
             "status": "error",
             "message": f"Error processing upload: {str(e)}",
             "timestamp": datetime.now().isoformat()
         }
+        log_response(response, "/api/upload/multipart")
+        return response
 
 # Run the app with uvicorn if executed directly
 if __name__ == "__main__":
