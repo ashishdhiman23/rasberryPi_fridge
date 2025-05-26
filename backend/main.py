@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, File, UploadFile, Form, Body
+from fastapi import FastAPI, File, UploadFile, Form
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 import os
@@ -46,11 +46,134 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Create placeholder routers - we'll implement a basic API without the complex imports
-upload_router = APIRouter()
-status_router = APIRouter()
-notifications_router = APIRouter()
-chat_router = APIRouter()
+# Store the latest fridge data globally for chat context
+latest_fridge_data = {
+    "temp": 4.2,
+    "humidity": 52.3,
+    "gas": 125,
+    "items": ["milk", "eggs", "cheese", "yogurt", "leftovers"],
+    "last_updated": datetime.now().isoformat()
+}
+
+async def analyze_fridge_image(image_data: bytes) -> Dict[str, Any]:
+    """
+    Analyze fridge image using GPT-4 Vision to detect food items
+    
+    Args:
+        image_data: Raw image bytes
+        
+    Returns:
+        Dict containing detected food items and analysis
+    """
+    try:
+        # Get OpenAI API key
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            print("WARNING: OPENAI_API_KEY not found")
+            return {
+                "food_items": ["milk", "eggs"],  # fallback
+                "analysis": "Unable to analyze image - API key not configured",
+                "confidence": "low"
+            }
+        
+        # Convert image to base64
+        image_base64 = base64.b64encode(image_data).decode('utf-8')
+        
+        # Prepare GPT-4 Vision request
+        vision_request = {
+            "model": "gpt-4-vision-preview",
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": """Analyze this refrigerator image and identify all visible food items. 
+                            Please provide:
+                            1. A list of specific food items you can clearly see
+                            2. Brief analysis of freshness/condition if visible
+                            3. Any safety concerns
+                            
+                            Format your response as JSON with these fields:
+                            - food_items: array of specific food item names
+                            - analysis: brief text analysis
+                            - safety_notes: any safety concerns
+                            - confidence: high/medium/low based on image clarity"""
+                        },
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:image/jpeg;base64,{image_base64}"
+                            }
+                        }
+                    ]
+                }
+            ],
+            "max_tokens": 500
+        }
+        
+        # Call OpenAI Vision API
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            response = await client.post(
+                "https://api.openai.com/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json"
+                },
+                json=vision_request
+            )
+            
+            log_api_call("OpenAI Vision Analysis", vision_request, response.json())
+            
+            if response.status_code == 200:
+                result = response.json()
+                vision_response = result["choices"][0]["message"]["content"]
+                
+                # Try to parse JSON response
+                try:
+                    analysis_result = json.loads(vision_response)
+                    return analysis_result
+                except json.JSONDecodeError:
+                    # If not JSON, extract food items from text
+                    return {
+                        "food_items": extract_food_items_from_text(vision_response),
+                        "analysis": vision_response,
+                        "confidence": "medium"
+                    }
+            else:
+                print(f"Vision API error: {response.status_code} - {response.text}")
+                return {
+                    "food_items": ["milk", "eggs"],  # fallback
+                    "analysis": f"Vision API error: {response.status_code}",
+                    "confidence": "low"
+                }
+                
+    except Exception as e:
+        print(f"Error in image analysis: {e}")
+        return {
+            "food_items": ["milk", "eggs"],  # fallback
+            "analysis": f"Error analyzing image: {str(e)}",
+            "confidence": "low"
+        }
+
+def extract_food_items_from_text(text: str) -> list:
+    """Extract food items from text response if JSON parsing fails"""
+    # Simple extraction - look for common food words
+    common_foods = [
+        "milk", "eggs", "cheese", "yogurt", "butter", "bread", "meat", "chicken",
+        "beef", "fish", "vegetables", "fruits", "apples", "oranges", "carrots",
+        "lettuce", "tomatoes", "onions", "potatoes", "leftovers", "juice",
+        "water", "soda", "beer", "wine", "condiments", "sauce", "jam"
+    ]
+    
+    found_items = []
+    text_lower = text.lower()
+    
+    for food in common_foods:
+        if food in text_lower:
+            found_items.append(food)
+    
+    return found_items if found_items else ["milk", "eggs"]  # fallback
 
 # Root endpoint
 @app.get("/")
@@ -87,22 +210,9 @@ async def status():
 # Endpoint for the frontend to get fridge status
 @app.get("/api/fridge-status")
 async def fridge_status():
-    response = {
-        "temp": 4.2,
-        "humidity": 52.3,
-        "gas": 125,
-        "items": ["milk", "eggs", "cheese", "yogurt", "leftovers"],
-        "priority": ["milk (expires soon)", "leftovers (3d old)"],
-        "analysis": {
-            "freshness": "All items appear fresh",
-            "safety": "Temperature is in the safe range (2-5°C)",
-            "fill_level": "Fridge is 60% full",
-            "recommendations": "Consider consuming milk soon"
-        },
-        "timestamp": datetime.now().isoformat()
-    }
-    log_response(response, "/api/fridge-status")
-    return response
+    global latest_fridge_data
+    log_response(latest_fridge_data, "/api/fridge-status")
+    return latest_fridge_data
 
 # Chat endpoint for conversing with the fridge
 @app.post("/api/chat", response_model=ChatResponse)
@@ -110,13 +220,8 @@ async def chat(request: ChatRequest):
     try:
         log_request(request.dict(), "/api/chat")
         
-        # Get the last fridge status to provide context to the model
-        fridge_data = {
-            "temp": 4.2,
-            "humidity": 52.3,
-            "gas": 125,
-            "items": ["milk", "eggs", "cheese", "yogurt", "leftovers"],
-        }
+        # Use the latest fridge data from image analysis
+        global latest_fridge_data
         
         # Get OpenAI API key from environment
         api_key = os.getenv("OPENAI_API_KEY")
@@ -132,16 +237,16 @@ async def chat(request: ChatRequest):
             log_response(response, "/api/chat")
             return response
             
-        # Create a system prompt with the fridge information
+        # Create a system prompt with the latest fridge information
         system_prompt = f"""
         You are a helpful assistant for a Smart Fridge. You can answer questions about the contents
         of the fridge and provide recommendations based on the current inventory.
         
-        Current fridge status:
-        - Temperature: {fridge_data['temp']}°C
-        - Humidity: {fridge_data['humidity']}%
-        - Gas Level: {fridge_data['gas']} PPM
-        - Food items: {', '.join(fridge_data['items'])}
+        Current fridge status (last updated: {latest_fridge_data.get('last_updated', 'unknown')}):
+        - Temperature: {latest_fridge_data['temp']}°C
+        - Humidity: {latest_fridge_data['humidity']}%
+        - Gas Level: {latest_fridge_data['gas']} PPM
+        - Food items: {', '.join(latest_fridge_data['items'])}
         
         Be helpful, concise, and natural in your responses. If the user asks about food items not in the
         fridge, you can politely inform them that those items aren't currently detected.
@@ -199,45 +304,74 @@ async def chat(request: ChatRequest):
         log_response(response, "/api/chat")
         return response
 
-# Simple upload endpoint that matches the simulator's expected endpoint
+# Improved upload endpoint with actual image processing
 @app.post("/api/upload/multipart")
 async def upload_multipart(
     data: str = Form(...),
     image: Optional[UploadFile] = File(None)
 ):
+    global latest_fridge_data
+    
     try:
         # Log the incoming request
         request_data = {
             "data": data,
-            "image_filename": image.filename if image else None
+            "image_filename": image.filename if image else None,
+            "image_size": len(await image.read()) if image else 0
         }
         log_request(request_data, "/api/upload/multipart")
+        
+        # Reset file pointer after reading for size
+        if image:
+            await image.seek(0)
         
         # Parse the JSON data
         sensor_data = json.loads(data)
         
-        # Process image if provided
-        image_processed = False
+        # Process image with GPT-4 Vision if provided
+        vision_analysis = None
         if image:
-            # In a real implementation, we would process the image
-            # For now, we'll just acknowledge receipt
-            image_processed = True
+            print(f"Processing image: {image.filename} ({request_data['image_size']} bytes)")
+            image_data = await image.read()
+            vision_analysis = await analyze_fridge_image(image_data)
+            
+            # Update global fridge data with vision analysis
+            latest_fridge_data.update({
+                "temp": sensor_data.get("temp", 4.2),
+                "humidity": sensor_data.get("humidity", 52.3),
+                "gas": sensor_data.get("gas", 125),
+                "items": vision_analysis.get("food_items", ["milk", "eggs"]),
+                "last_updated": datetime.now().isoformat(),
+                "vision_analysis": vision_analysis.get("analysis", ""),
+                "confidence": vision_analysis.get("confidence", "medium")
+            })
+        else:
+            # Update sensor data only
+            latest_fridge_data.update({
+                "temp": sensor_data.get("temp", 4.2),
+                "humidity": sensor_data.get("humidity", 52.3),
+                "gas": sensor_data.get("gas", 125),
+                "last_updated": datetime.now().isoformat()
+            })
         
         # Log the received data
         print(f"Received sensor data: {sensor_data}")
-        if image:
-            print(f"Received image: {image.filename}")
+        if vision_analysis:
+            print(f"Vision analysis: {vision_analysis}")
         
         response = {
             "status": "success",
-            "message": "Data received and processed",
+            "message": "Data received and processed with AI vision",
             "timestamp": datetime.now().isoformat(),
-            "image_processed": image_processed,
-            "food_items": ["milk", "eggs"],
-            "temperature_status": "normal" if 2 <= sensor_data.get("temp", 4) <= 5 else "warning"
+            "image_processed": image is not None,
+            "food_items": vision_analysis.get("food_items", ["milk", "eggs"]) if vision_analysis else latest_fridge_data["items"],
+            "temperature_status": "normal" if 2 <= sensor_data.get("temp", 4) <= 5 else "warning",
+            "vision_confidence": vision_analysis.get("confidence", "none") if vision_analysis else "none",
+            "analysis": vision_analysis.get("analysis", "") if vision_analysis else ""
         }
         log_response(response, "/api/upload/multipart")
         return response
+        
     except Exception as e:
         log_error(e, "/api/upload/multipart")
         response = {
