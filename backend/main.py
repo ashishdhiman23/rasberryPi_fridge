@@ -81,7 +81,7 @@ async def analyze_fridge_image(image_data: bytes) -> Dict[str, Any]:
         
         # Prepare GPT-4 Vision request
         vision_request = {
-            "model": "gpt-4-vision-preview",
+            "model": "gpt-4o",
             "messages": [
                 {
                     "role": "user",
