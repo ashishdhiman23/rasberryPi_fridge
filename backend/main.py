@@ -189,6 +189,48 @@ def extract_food_items_from_text(text: str) -> list:
     
     return found_items if found_items else ["milk", "eggs"]  # fallback
 
+
+def generate_recipe_suggestions(food_items: list) -> str:
+    """Generate recipe suggestions based on detected food items"""
+    if not food_items:
+        return "No specific recipes available. Please add some food items to your fridge!"
+    
+    # Recipe suggestions based on common food combinations
+    recipes = []
+    
+    # Fruit-based recipes
+    fruits = ["mangoes", "mango", "pineapple", "apples", "bananas", "banana", "grapes", "berries", "oranges"]
+    detected_fruits = [item for item in food_items if item.lower() in fruits]
+    
+    if detected_fruits:
+        if len(detected_fruits) >= 2:
+            recipes.append(f"🥗 Fresh Fruit Salad with {', '.join(detected_fruits[:3])}")
+        recipes.append(f"🥤 Smoothie with {detected_fruits[0]}")
+        if "mangoes" in detected_fruits or "mango" in detected_fruits:
+            recipes.append("🥭 Mango Lassi or Mango Sticky Rice")
+        if "pineapple" in detected_fruits:
+            recipes.append("🍍 Grilled Pineapple or Pineapple Upside-down Cake")
+    
+    # Vegetable-based recipes
+    vegetables = ["carrots", "lettuce", "tomatoes", "onions", "potatoes"]
+    detected_vegetables = [item for item in food_items if item.lower() in vegetables]
+    
+    if detected_vegetables:
+        recipes.append(f"🥗 Fresh Salad with {', '.join(detected_vegetables[:2])}")
+        if "potatoes" in detected_vegetables:
+            recipes.append("🥔 Roasted Potatoes or Mashed Potatoes")
+    
+    # Dairy and protein combinations
+    if "eggs" in food_items and "milk" in food_items:
+        recipes.append("🍳 Scrambled Eggs or French Toast")
+    elif "eggs" in food_items:
+        recipes.append("🥚 Boiled Eggs or Omelet")
+    
+    if not recipes:
+        return f"Try using your {', '.join(food_items[:3])} in a healthy meal or snack!"
+    
+    return " • ".join(recipes[:4])  # Limit to 4 suggestions
+
 # Root endpoint
 @app.get("/")
 async def root():
@@ -349,6 +391,19 @@ async def upload_multipart(
             image_data = await image.read()
             vision_analysis = await analyze_fridge_image(image_data)
             
+            # Structure analysis for frontend
+            analysis_text = vision_analysis.get("analysis", "")
+            food_items = vision_analysis.get("food_items", [])
+            
+            # Generate recipe suggestions based on detected items
+            recipe_suggestions = generate_recipe_suggestions(food_items)
+            
+            structured_analysis = {
+                "safety": vision_analysis.get("safety_notes", "No safety concerns detected."),
+                "freshness": analysis_text,
+                "recipes": recipe_suggestions
+            }
+            
             # Update global fridge data with vision analysis
             latest_fridge_data.update({
                 "temp": sensor_data.get("temp", 4.2),
@@ -356,7 +411,8 @@ async def upload_multipart(
                 "gas": sensor_data.get("gas", 125),
                 "items": vision_analysis.get("food_items", ["milk", "eggs"]),
                 "last_updated": datetime.now().isoformat(),
-                "vision_analysis": vision_analysis.get("analysis", ""),
+                "vision_analysis": analysis_text,
+                "analysis": structured_analysis,
                 "confidence": vision_analysis.get("confidence", "medium")
             })
         else:
