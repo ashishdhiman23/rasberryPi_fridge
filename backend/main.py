@@ -129,12 +129,25 @@ async def analyze_fridge_image(image_data: bytes) -> Dict[str, Any]:
                 result = response.json()
                 vision_response = result["choices"][0]["message"]["content"]
                 
-                # Try to parse JSON response
+                # Try to parse JSON response (handle markdown code blocks)
                 try:
+                    # First try direct JSON parsing
                     analysis_result = json.loads(vision_response)
                     return analysis_result
                 except json.JSONDecodeError:
-                    # If not JSON, extract food items from text
+                    # Try to extract JSON from markdown code blocks
+                    try:
+                        # Look for JSON within ```json ... ``` blocks
+                        import re
+                        json_match = re.search(r'```json\s*\n(.*?)\n```', vision_response, re.DOTALL)
+                        if json_match:
+                            json_content = json_match.group(1)
+                            analysis_result = json.loads(json_content)
+                            return analysis_result
+                    except (json.JSONDecodeError, AttributeError):
+                        pass
+                    
+                    # If still no JSON, extract food items from text
                     return {
                         "food_items": extract_food_items_from_text(vision_response),
                         "analysis": vision_response,
@@ -163,7 +176,8 @@ def extract_food_items_from_text(text: str) -> list:
         "milk", "eggs", "cheese", "yogurt", "butter", "bread", "meat", "chicken",
         "beef", "fish", "vegetables", "fruits", "apples", "oranges", "carrots",
         "lettuce", "tomatoes", "onions", "potatoes", "leftovers", "juice",
-        "water", "soda", "beer", "wine", "condiments", "sauce", "jam"
+        "water", "soda", "beer", "wine", "condiments", "sauce", "jam",
+        "mangoes", "mango", "pineapple", "bananas", "banana", "grapes", "berries"
     ]
     
     found_items = []
