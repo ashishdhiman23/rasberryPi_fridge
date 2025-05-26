@@ -10,6 +10,7 @@ from pydantic import BaseModel
 import httpx
 from dotenv import load_dotenv
 from utils.logger import log_request, log_response, log_error, log_api_call
+from image_guardrail import should_process_with_gpt_vision
 
 # Load environment variables from .env file
 load_dotenv()
@@ -386,10 +387,30 @@ async def upload_multipart(
         
         # Process image with GPT-4 Vision if provided
         vision_analysis = None
+        guardrail_result = None
+        
         if image:
             print(f"Processing image: {image.filename} ({request_data['image_size']} bytes)")
             image_data = await image.read()
-            vision_analysis = await analyze_fridge_image(image_data)
+            
+            # Apply guardrail to check if image contains food
+            should_process, guardrail_analysis = should_process_with_gpt_vision(image_data)
+            guardrail_result = guardrail_analysis
+            
+            print(f"Guardrail analysis: {guardrail_analysis}")
+            
+            if should_process:
+                print("✅ Guardrail passed - processing with GPT-4 Vision")
+                vision_analysis = await analyze_fridge_image(image_data)
+            else:
+                print("❌ Guardrail blocked - image doesn't appear to contain food")
+                # Create a mock analysis for non-food images
+                vision_analysis = {
+                    "food_items": [],
+                    "analysis": f"Image analysis skipped - {guardrail_analysis.get('method', 'guardrail')} detected this may not be a food image (confidence: {guardrail_analysis.get('food_confidence', 0):.2f})",
+                    "confidence": "low",
+                    "safety_notes": "No food items detected in image"
+                }
             
             # Structure analysis for frontend
             analysis_text = vision_analysis.get("analysis", "")
@@ -437,7 +458,8 @@ async def upload_multipart(
             "food_items": vision_analysis.get("food_items", ["milk", "eggs"]) if vision_analysis else latest_fridge_data["items"],
             "temperature_status": "normal" if 2 <= sensor_data.get("temp", 4) <= 5 else "warning",
             "vision_confidence": vision_analysis.get("confidence", "none") if vision_analysis else "none",
-            "analysis": vision_analysis.get("analysis", "") if vision_analysis else ""
+            "analysis": vision_analysis.get("analysis", "") if vision_analysis else "",
+            "guardrail": guardrail_result if guardrail_result else None
         }
         log_response(response, "/api/upload/multipart")
         return response
