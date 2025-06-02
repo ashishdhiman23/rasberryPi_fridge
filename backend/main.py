@@ -1,4 +1,4 @@
-from fastapi import FastAPI, File, UploadFile, Form
+from fastapi import FastAPI, File, UploadFile, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 import os
@@ -9,8 +9,9 @@ from datetime import datetime
 from pydantic import BaseModel
 import httpx
 from dotenv import load_dotenv
-from utils.logger import log_request, log_response, log_error, log_api_call
-from image_guardrail import should_process_with_gpt_vision
+from backend.utils.logger import log_request, log_response, log_error, log_api_call
+from backend.image_guardrail import should_process_with_gpt_vision
+from backend.utils import db
 
 # Load environment variables from .env file
 load_dotenv()
@@ -33,6 +34,9 @@ app = FastAPI(
                 "multiple OpenAI Assistants",
     version="1.0.0"
 )
+
+from backend.routes import items as items_router
+app.include_router(items_router.router)
 
 # Get allowed origins from environment variable or use default
 allowed_origins = os.getenv("ALLOWED_ORIGINS", "*").split(",")
@@ -365,16 +369,21 @@ async def chat(request: ChatRequest):
 @app.post("/api/upload/multipart")
 async def upload_multipart(
     data: str = Form(...),
-    image: Optional[UploadFile] = File(None)
+    image: Optional[UploadFile] = File(None),
+    username: str = Form(None)
 ):
     global latest_fridge_data
     
     try:
+        if not username:
+            raise HTTPException(status_code=400, detail="Username is required")
+
         # Log the incoming request
         request_data = {
             "data": data,
             "image_filename": image.filename if image else None,
-            "image_size": len(await image.read()) if image else 0
+            "image_size": len(await image.read()) if image else 0,
+            "username": username
         }
         log_request(request_data, "/api/upload/multipart")
         
@@ -388,6 +397,7 @@ async def upload_multipart(
         # Process image with GPT-4 Vision if provided
         vision_analysis = None
         guardrail_result = None
+        user_id = await db.add_user(username)
         
         if image:
             print(f"Processing image: {image.filename} ({request_data['image_size']} bytes)")
@@ -402,6 +412,9 @@ async def upload_multipart(
             if should_process:
                 print("✅ Guardrail passed - processing with GPT-4 Vision")
                 vision_analysis = await analyze_fridge_image(image_data)
+                # Update user's item list with detected items
+                for item_name in vision_analysis.get("food_items", []):
+                    await db.add_or_update_item(user_id, item_name, 1)
             else:
                 print("❌ Guardrail blocked - image doesn't appear to contain food")
                 # Create a mock analysis for non-food images
@@ -414,7 +427,9 @@ async def upload_multipart(
             
             # Structure analysis for frontend
             analysis_text = vision_analysis.get("analysis", "")
-            food_items = vision_analysis.get("food_items", [])
+            # Use the user's item list for AI analysis
+            user_items = await db.get_items(user_id)
+            food_items = [item["name"] for item in user_items]
             
             # Generate recipe suggestions based on detected items
             recipe_suggestions = generate_recipe_suggestions(food_items)
@@ -430,7 +445,7 @@ async def upload_multipart(
                 "temp": sensor_data.get("temp", 4.2),
                 "humidity": sensor_data.get("humidity", 52.3),
                 "gas": sensor_data.get("gas", 125),
-                "items": vision_analysis.get("food_items", ["milk", "eggs"]),
+                "items": food_items,
                 "last_updated": datetime.now().isoformat(),
                 "vision_analysis": analysis_text,
                 "analysis": structured_analysis,
@@ -455,7 +470,7 @@ async def upload_multipart(
             "message": "Data received and processed with AI vision",
             "timestamp": datetime.now().isoformat(),
             "image_processed": image is not None,
-            "food_items": vision_analysis.get("food_items", ["milk", "eggs"]) if vision_analysis else latest_fridge_data["items"],
+            "food_items": latest_fridge_data["items"],
             "temperature_status": "normal" if 2 <= sensor_data.get("temp", 4) <= 5 else "warning",
             "vision_confidence": vision_analysis.get("confidence", "none") if vision_analysis else "none",
             "analysis": vision_analysis.get("analysis", "") if vision_analysis else "",

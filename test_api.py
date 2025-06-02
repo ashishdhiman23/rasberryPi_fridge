@@ -177,4 +177,61 @@ if __name__ == "__main__":
     print("\n" + "-"*30 + "\n")
     test_notifications_endpoint()
     print("\n" + "-"*30 + "\n")
-    test_upload_endpoint()  # This may take longer due to AI processing 
+    test_upload_endpoint()  # This may take longer due to AI processing
+
+    # Test 1: Add an item for user 'ashish'
+    print("=== Test 1: Adding an item for user 'ashish' ===")
+    response = requests.post(
+        "http://localhost:8000/api/user/ashish/items",
+        json={"name": "Apple", "quantity": 3}
+    )
+    print(f"Status: {response.status_code}")
+    print(f"Response: {response.json()}")
+    print()
+
+    # Test 2: Get items for user 'ashish'
+    print("=== Test 2: Getting items for user 'ashish' ===")
+    response = requests.get("http://localhost:8000/api/user/ashish/items")
+    print(f"Status: {response.status_code}")
+    print(f"Response: {response.json()}")
+    print()
+
+    # Test 3: Add another item for user 'ashish'
+    print("=== Test 3: Adding another item for user 'ashish' ===")
+    response = requests.post(
+        "http://localhost:8000/api/user/ashish/items",
+        json={"name": "Banana", "quantity": 2}
+    )
+    print(f"Status: {response.status_code}")
+    print(f"Response: {response.json()}")
+    print()
+
+    # Test 4: Add the same item again (should update quantity)
+    print("=== Test 4: Adding same item again (should update quantity) ===")
+    response = requests.post(
+        "http://localhost:8000/api/user/ashish/items",
+        json={"name": "Apple", "quantity": 2}
+    )
+    print(f"Status: {response.status_code}")
+    print(f"Response: {response.json()}")
+    print()
+
+    # Test 5: Get final items list
+    print("=== Test 5: Final items list for user 'ashish' ===")
+    response = requests.get("http://localhost:8000/api/user/ashish/items")
+    print(f"Status: {response.status_code}")
+    print(f"Response: {response.json()}")
+    print()
+
+    # Test 6: Test image upload with form data
+    print("=== Test 6: Test multipart upload with username ===")
+    files = {
+        'data': (None, '{"user_message": "Analyze my fridge"}'),
+        'username': (None, 'ashish')
+    }
+    response = requests.post("http://localhost:8000/api/upload/multipart", files=files)
+    print(f"Status: {response.status_code}")
+    if response.status_code == 200:
+        print(f"Response: {response.json()}")
+    else:
+        print(f"Error: {response.text}") 
