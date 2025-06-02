@@ -11,8 +11,22 @@
     <div class="dashboard-container">
         <header class="dashboard-header">
             <h1>Smart Fridge Dashboard</h1>
-            <div id="api-status" class="status-indicator offline">
-                API: Offline
+            <div class="header-controls">
+                <div class="user-selector">
+                    <label for="username-select">User:</label>
+                    <select id="username-select">
+                        <option value="">Select User</option>
+                        <option value="ashish">Ashish</option>
+                        <option value="john">John</option>
+                        <option value="mary">Mary</option>
+                        <option value="guest">Guest</option>
+                    </select>
+                    <input type="text" id="new-username" placeholder="Or enter new user..." style="display: none;">
+                    <button id="add-user-btn" type="button">+ Add User</button>
+                </div>
+                <div id="api-status" class="status-indicator offline">
+                    API: Offline
+                </div>
             </div>
         </header>
 
@@ -72,9 +86,44 @@
             </div>
 
             <div class="dashboard-card food-items">
-                <h2>Detected Food Items</h2>
+                <div class="food-items-header">
+                    <h2>Your Food Items</h2>
+                    <div class="user-actions">
+                        <button id="refresh-items" class="action-btn">🔄 Refresh</button>
+                        <button id="add-item-btn" class="action-btn">+ Add Item</button>
+                    </div>
+                </div>
+                <div id="user-info" class="user-info" style="display: none;">
+                    <span id="current-user">No user selected</span>
+                    <span id="item-count">0 items</span>
+                </div>
                 <div id="food-items-container" class="food-items-list">
-                    <div class="no-items">No food items detected yet</div>
+                    <div class="no-items">Please select a user to view their items</div>
+                </div>
+            </div>
+
+            <!-- Add Item Modal -->
+            <div id="add-item-modal" class="modal" style="display: none;">
+                <div class="modal-content">
+                    <h3>Add New Item</h3>
+                    <form id="add-item-form">
+                        <div class="form-group">
+                            <label for="item-name">Item Name:</label>
+                            <input type="text" id="item-name" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="item-quantity">Quantity:</label>
+                            <input type="number" id="item-quantity" value="1" min="1">
+                        </div>
+                        <div class="form-group">
+                            <label for="item-expiry">Expiry Date (optional):</label>
+                            <input type="date" id="item-expiry">
+                        </div>
+                        <div class="form-actions">
+                            <button type="submit">Add Item</button>
+                            <button type="button" id="cancel-add-item">Cancel</button>
+                        </div>
+                    </form>
                 </div>
             </div>
         </div>

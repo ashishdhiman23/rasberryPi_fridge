@@ -1,9 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { fetchFridgeStatus } from '../utils/api';
 import SensorCard from '../components/SensorCard';
 import FoodItem from '../components/FoodItem';
 import AiAnalysisTabs from '../components/AiAnalysisTabs';
 import ChatInterface from '../components/ChatInterface';
+import UserItemsManager from '../components/UserItemsManager';
 
 /**
  * Helper function to determine sensor status based on values
@@ -36,6 +37,110 @@ const Dashboard = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showChat, setShowChat] = useState(false);
+  
+  // User management state
+  const [currentUser, setCurrentUser] = useState('');
+  const [userItems, setUserItems] = useState([]);
+  const [loadingUserItems, setLoadingUserItems] = useState(false);
+  const [userError, setUserError] = useState(null);
+
+  // Load user from localStorage on mount
+  useEffect(() => {
+    const savedUser = localStorage.getItem('fridgeUsername');
+    if (savedUser) {
+      setCurrentUser(savedUser);
+    }
+  }, []);
+
+  // Fetch user items when current user changes
+  useEffect(() => {
+    if (currentUser) {
+      fetchUserItems();
+    } else {
+      setUserItems([]);
+    }
+  }, [currentUser]);
+
+  // Fetch user items from API
+  const fetchUserItems = useCallback(async () => {
+    if (!currentUser) return;
+    
+    try {
+      setLoadingUserItems(true);
+      setUserError(null);
+      
+      const response = await fetch(`${process.env.REACT_APP_API_URL || ''}/api/user/${currentUser}/items`);
+      
+      if (response.ok) {
+        const items = await response.json();
+        setUserItems(items);
+      } else if (response.status === 404) {
+        // User not found, but that's okay - they just don't have items yet
+        setUserItems([]);
+      } else {
+        throw new Error(`HTTP ${response.status}`);
+      }
+    } catch (err) {
+      setUserError('Failed to load user items');
+      console.error('Error fetching user items:', err);
+    } finally {
+      setLoadingUserItems(false);
+    }
+  }, [currentUser]);
+
+  // Add item to user's fridge
+  const addUserItem = async (itemData) => {
+    if (!currentUser) return false;
+    
+    try {
+      const response = await fetch(`${process.env.REACT_APP_API_URL || ''}/api/user/${currentUser}/items`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(itemData)
+      });
+      
+      if (response.ok) {
+        await fetchUserItems(); // Refresh items
+        return true;
+      }
+      return false;
+    } catch (err) {
+      console.error('Error adding item:', err);
+      return false;
+    }
+  };
+
+  // Delete item from user's fridge
+  const deleteUserItem = async (itemId) => {
+    if (!currentUser) return false;
+    
+    try {
+      const response = await fetch(`${process.env.REACT_APP_API_URL || ''}/api/user/${currentUser}/items/${itemId}`, {
+        method: 'DELETE'
+      });
+      
+      if (response.ok) {
+        await fetchUserItems(); // Refresh items
+        return true;
+      }
+      return false;
+    } catch (err) {
+      console.error('Error deleting item:', err);
+      return false;
+    }
+  };
+
+  // Handle user selection
+  const handleUserChange = (username) => {
+    setCurrentUser(username);
+    if (username) {
+      localStorage.setItem('fridgeUsername', username);
+    } else {
+      localStorage.removeItem('fridgeUsername');
+    }
+  };
 
   // Fetch data on component mount
   useEffect(() => {
@@ -92,8 +197,8 @@ const Dashboard = () => {
   // If we have data, display the dashboard
   return (
     <div className="min-h-screen bg-gray-50 py-6 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-4xl mx-auto">
-        <header className="mb-6 flex justify-between items-center">
+      <div className="max-w-6xl mx-auto">
+        <header className="mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Smart Fridge Dashboard</h1>
             {fridgeData?.timestamp && (
@@ -102,19 +207,35 @@ const Dashboard = () => {
               </p>
             )}
           </div>
-          <button
-            className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            onClick={() => setShowChat(!showChat)}
-          >
-            {showChat ? 'Hide Chat' : 'Chat with Fridge'}
-          </button>
+          <div className="flex gap-2">
+            <button
+              className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              onClick={() => setShowChat(!showChat)}
+            >
+              {showChat ? 'Hide Chat' : 'Chat with Fridge'}
+            </button>
+          </div>
         </header>
+
+        {/* User Selection and Items Management */}
+        <section className="mb-8">
+          <UserItemsManager
+            currentUser={currentUser}
+            onUserChange={handleUserChange}
+            userItems={userItems}
+            onRefreshItems={fetchUserItems}
+            onAddItem={addUserItem}
+            onDeleteItem={deleteUserItem}
+            loading={loadingUserItems}
+            error={userError}
+          />
+        </section>
 
         {/* Chat Interface - conditionally rendered */}
         {showChat && (
           <section className="mb-8">
             <h2 className="text-lg font-semibold text-gray-700 mb-3">Chat with Your Fridge</h2>
-            <ChatInterface fridgeData={fridgeData} />
+            <ChatInterface fridgeData={fridgeData} currentUser={currentUser} />
           </section>
         )}
 

@@ -4,16 +4,27 @@ import React, { useState, useRef, useEffect } from 'react';
  * ChatInterface component for the Smart Fridge Dashboard
  * Allows users to ask questions about their fridge contents
  */
-const ChatInterface = ({ fridgeData }) => {
+const ChatInterface = ({ fridgeData, currentUser }) => {
   const [messages, setMessages] = useState([
     {
       role: 'assistant',
-      content: 'Hello! I\'m your Smart Fridge Assistant. Ask me anything about your fridge contents!'
+      content: currentUser 
+        ? `Hello ${currentUser}! I'm your Smart Fridge Assistant. Ask me anything about your fridge contents!`
+        : 'Hello! I\'m your Smart Fridge Assistant. Select a user to get personalized responses about your fridge!'
     }
   ]);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef(null);
+
+  // Update welcome message when user changes
+  useEffect(() => {
+    const welcomeMessage = currentUser 
+      ? `Hello ${currentUser}! I'm your Smart Fridge Assistant. Ask me anything about your fridge contents!`
+      : 'Hello! I\'m your Smart Fridge Assistant. Select a user to get personalized responses about your fridge!';
+    
+    setMessages([{ role: 'assistant', content: welcomeMessage }]);
+  }, [currentUser]);
 
   // Auto-scroll to the bottom of the chat when new messages are added
   useEffect(() => {
@@ -27,6 +38,16 @@ const ChatInterface = ({ fridgeData }) => {
     e.preventDefault();
     if (!inputValue.trim()) return;
 
+    // Check if user is selected
+    if (!currentUser) {
+      setMessages(prev => [...prev, 
+        { role: 'user', content: inputValue },
+        { role: 'assistant', content: 'Please select a user first to get personalized responses about their fridge items!' }
+      ]);
+      setInputValue('');
+      return;
+    }
+
     // Add the user message to the chat
     const userMessage = { role: 'user', content: inputValue };
     setMessages(prev => [...prev, userMessage]);
@@ -35,14 +56,15 @@ const ChatInterface = ({ fridgeData }) => {
 
     try {
       // Send the message to the backend
-      const response = await fetch(`${process.env.REACT_APP_API_URL || 'https://smart-fridge-backend.onrender.com/api'}/chat`, {
+      const response = await fetch(`${process.env.REACT_APP_API_URL || ''}/api/chat`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           user_message: inputValue,
-          session_id: localStorage.getItem('chatSessionId') || crypto.randomUUID()
+          username: currentUser, // Include current user
+          session_id: localStorage.getItem(`chatSessionId_${currentUser}`) || crypto.randomUUID()
         }),
       });
 
@@ -52,9 +74,9 @@ const ChatInterface = ({ fridgeData }) => {
 
       const data = await response.json();
       
-      // Save the session ID for future messages
-      if (!localStorage.getItem('chatSessionId')) {
-        localStorage.setItem('chatSessionId', data.session_id || crypto.randomUUID());
+      // Save the session ID for future messages (per user)
+      if (!localStorage.getItem(`chatSessionId_${currentUser}`)) {
+        localStorage.setItem(`chatSessionId_${currentUser}`, data.session_id || crypto.randomUUID());
       }
 
       // Add the assistant's response to the chat
@@ -75,6 +97,13 @@ const ChatInterface = ({ fridgeData }) => {
 
   return (
     <div className="bg-white rounded-lg shadow-sm p-4 h-[500px] flex flex-col">
+      {/* User indicator */}
+      {currentUser && (
+        <div className="mb-3 px-3 py-2 bg-blue-50 rounded-lg text-sm text-blue-700">
+          <span className="font-medium">Chatting as:</span> {currentUser}
+        </div>
+      )}
+      
       <div className="flex-1 overflow-y-auto mb-4 px-2">
         {messages.map((message, index) => (
           <div
@@ -84,7 +113,7 @@ const ChatInterface = ({ fridgeData }) => {
             }`}
           >
             <div
-              className={`inline-block px-4 py-2 rounded-lg ${
+              className={`inline-block px-4 py-2 rounded-lg max-w-[80%] ${
                 message.role === 'user'
                   ? 'bg-blue-500 text-white'
                   : 'bg-gray-100 text-gray-800'
@@ -113,7 +142,7 @@ const ChatInterface = ({ fridgeData }) => {
           type="text"
           value={inputValue}
           onChange={(e) => setInputValue(e.target.value)}
-          placeholder="Ask about your fridge..."
+          placeholder={currentUser ? "Ask about your fridge..." : "Select a user first..."}
           className="flex-1 px-4 py-2 border border-gray-300 rounded-l-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
           disabled={isLoading}
         />
